@@ -1,4 +1,4 @@
-# Diplom
+# Practice department service
 
 Сервис для работы отдела организации практик и стажировок БГТУ "ВОЕНМЕХ".
 
@@ -17,7 +17,7 @@
 | Команда | Описание |
 |------------|-------------------------------------|
 | `cp .env-default .env` | создать локальный `.env` |
-| положить дамп в папку `docker-db/` | MySQL импортирует все `*.sql` из этой папки при первом создании пустого volume |
+| положить дамп в папку `docker-db/` | MySQL импортирует `*.sql` из этой папки при первом создании пустого volume |
 | `docker compose up --build -d` | поднять приложение, MySQL и Redis |
 | `docker compose exec app alembic upgrade head` | применить миграции |
 | `docker compose exec app python -m src.app.scripts.manage_app_user --username admin --role editor` | создать пользователя `editor` |
@@ -29,7 +29,7 @@
 | Команда | Описание |
 |------------|------------------------------------|
 | `docker compose down -v` | удалить контейнеры и volume MySQL |
-| заменить файлы в `docker-db/` | положить новый дамп |
+| заменить файл в `docker-db/` | положить новый дамп |
 | `docker compose up --build -d` | заново поднять приложение |
 | `docker compose exec app alembic upgrade head` | применить миграции |
 
@@ -87,13 +87,6 @@ python -m src.app.scripts.manage_app_user --username <login> --role <editor|view
 
 Если `--password` не передан, скрипт запросит пароль в консоли.
 
-### Миграции
-
-| Команда | Описание |
-|------------|-------------------------------------|
-| `alembic upgrade head` | применить последнюю миграцию |
-| `alembic revision --autogenerate -m "migration_name"` | создать новую миграцию |
-
 ### Makefile
 
 | Команда | Описание |
@@ -108,19 +101,3 @@ python -m src.app.scripts.manage_app_user --username <login> --role <editor|view
 | `make flake8` | запустить `flake8` |
 | `make lint` | запустить `mypy` и `flake8` |
 | `make test` | запустить тесты |
-
-### Как работает импорт дампа в Docker
-
-`docker compose` сам не ищет дамп на компьютере. Для первого запуска нужно явно положить файл дампа в папку `docker-db/`.
-
-MySQL импортирует этот файл только при создании нового пустого volume. Если volume уже существует, повторного автоимпорта не будет.
-
-Если нужен полностью чистый старт:
-
-| Команда | Описание |
-|------------|-------------------------------------|
-| `docker compose down -v` | удалить контейнеры и volume MySQL |
-| `docker volume ls | grep diplom` | проверить, что старый volume действительно исчез |
-| положить актуальный дамп в `docker-db/` | подготовить новый импорт |
-| `docker compose up --build -d` | создать новую БД и импортировать дамп заново |
-| `docker compose exec app alembic upgrade head` | применить миграции |
