@@ -1,0 +1,322 @@
+.distribution-subtitle {
+    margin: 10px 0 0;
+    max-width: 920px;
+}
+
+.distribution-toolbar {
+    grid-template-columns: repeat(auto-fit, minmax(220px, 280px));
+}
+
+.distribution-toolbar-chart {
+    grid-template-columns: repeat(auto-fit, minmax(220px, 260px));
+}
+
+.year-filter select {
+    min-height: 52px;
+    background: #fff;
+}
+
+.distribution-table-card,
+.chart-card {
+    overflow: hidden;
+}
+
+.distribution-table-scroll {
+    overflow-x: auto;
+}
+
+.distribution-data-table .contract-number-col,
+.distribution-data-table .signing-date-col,
+.distribution-data-table .year-col,
+.distribution-data-table .total-col,
+.distribution-data-table .logo-col {
+    white-space: nowrap;
+}
+
+.distribution-data-table .year-col,
+.distribution-data-table .total-col,
+.distribution-data-table .logo-col,
+.distribution-data-table .logo-cell,
+.distribution-data-table .year-cell,
+.distribution-data-table .total-cell {
+    text-align: center;
+    vertical-align: middle;
+}
+
+.distribution-data-table .organization-col {
+    min-width: 280px;
+}
+
+.distribution-data-table .contract-number-col {
+    min-width: 150px;
+}
+
+.distribution-data-table .signing-date-col {
+    min-width: 140px;
+}
+
+.distribution-data-table .year-col,
+.distribution-data-table .total-col {
+    min-width: 112px;
+}
+
+.distribution-year-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 68px;
+    min-height: 34px;
+    padding: 6px 10px;
+    border-radius: 999px;
+    background: rgba(36, 91, 255, 0.1);
+    color: var(--accent);
+    font-weight: 700;
+}
+
+.distribution-total-pill {
+    background: rgba(17, 19, 32, 0.08);
+    color: var(--text-main);
+}
+
+.distribution-loading,
+.distribution-error {
+    display: grid;
+    gap: 12px;
+    padding: 36px;
+    border-radius: 24px;
+    text-align: center;
+}
+
+.distribution-loading {
+    background: rgba(36, 91, 255, 0.06);
+    color: var(--accent);
+}
+
+.distribution-error {
+    background: rgba(220, 38, 38, 0.08);
+    color: #991b1b;
+}
+
+.distribution-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 16px;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.distribution-meta-badge {
+    display: inline-flex;
+    align-items: center;
+    min-height: 34px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    background: rgba(17, 19, 32, 0.06);
+    color: var(--text-main);
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.distribution-meta-note {
+    font-size: 0.92rem;
+}
+
+.chart-heading-row {
+    align-items: flex-start;
+}
+
+.chart-window-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.chart-nav-button[disabled] {
+    opacity: 0.5;
+    cursor: default;
+}
+
+.chart-shell {
+    display: grid;
+    gap: 18px;
+}
+
+.chart-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 12px;
+}
+
+.chart-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 34px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    background: rgba(17, 19, 32, 0.05);
+    color: var(--text-main);
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.chart-legend-swatch {
+    width: 14px;
+    height: 14px;
+    border-radius: 999px;
+    flex: 0 0 14px;
+}
+
+.chart-scale {
+    display: grid;
+    grid-template-columns: 260px minmax(0, 1fr);
+    gap: 18px;
+    align-items: center;
+}
+
+.chart-scale-ruler {
+    position: relative;
+    height: 34px;
+    border-bottom: 1px dashed rgba(17, 19, 32, 0.16);
+}
+
+.chart-scale-tick {
+    position: absolute;
+    bottom: -10px;
+    transform: translateX(-50%);
+    font-size: 0.8rem;
+    color: var(--text-soft);
+    white-space: nowrap;
+}
+
+.chart-scale-tick::before {
+    content: "";
+    position: absolute;
+    top: -16px;
+    left: 50%;
+    width: 1px;
+    height: 10px;
+    background: rgba(17, 19, 32, 0.2);
+    transform: translateX(-50%);
+}
+
+.chart-items {
+    display: grid;
+    gap: 14px;
+}
+
+.chart-row {
+    display: grid;
+    grid-template-columns: 260px minmax(0, 1fr);
+    gap: 18px;
+    align-items: center;
+}
+
+.chart-row-label {
+    display: grid;
+    gap: 4px;
+}
+
+.chart-row-title {
+    font-weight: 700;
+    line-height: 1.3;
+}
+
+.chart-row-meta {
+    color: var(--text-soft);
+    font-size: 0.88rem;
+}
+
+.chart-track {
+    position: relative;
+    min-height: 48px;
+    border-radius: 18px;
+    overflow: visible;
+    background:
+        linear-gradient(90deg, rgba(17, 19, 32, 0.05) 1px, transparent 1px) 0 0 / 25% 100%,
+        rgba(17, 19, 32, 0.04);
+    border: 1px solid rgba(17, 19, 32, 0.08);
+}
+
+.chart-track-inner {
+    display: flex;
+    align-items: stretch;
+    min-height: 48px;
+    height: 100%;
+    overflow: hidden;
+    border-radius: 18px;
+}
+
+.chart-segment {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+    color: #fff;
+    font-size: 0.8rem;
+    font-weight: 700;
+    line-height: 1;
+    padding: 0 6px;
+    border-right: 1px solid rgba(255, 255, 255, 0.28);
+}
+
+.chart-segment:last-child {
+    border-right: none;
+}
+
+.chart-segment.is-tight {
+    font-size: 0.72rem;
+    padding: 0 2px;
+}
+
+.chart-segment-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.chart-total-badge {
+    position: absolute;
+    top: 50%;
+    right: 12px;
+    transform: translateY(-50%);
+    display: inline-flex;
+    align-items: center;
+    min-height: 28px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: rgba(17, 19, 32, 0.84);
+    color: #fff;
+    font-size: 0.78rem;
+    font-weight: 700;
+    pointer-events: none;
+}
+
+@media (max-width: 980px) {
+    .chart-scale,
+    .chart-row {
+        grid-template-columns: 1fr;
+    }
+
+    .chart-scale-ruler {
+        margin-top: -4px;
+    }
+}
+
+@media (max-width: 768px) {
+    .distribution-toolbar,
+    .distribution-toolbar-chart {
+        grid-template-columns: 1fr;
+    }
+
+    .chart-window-controls {
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    .chart-track {
+        min-height: 54px;
+    }
+}

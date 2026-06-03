@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+
+{% block title %}График-статистика{% endblock %}
+
+{% block extra_head %}
+{% set timeline_stats_assets_version = '20260426-timeline-stats-v2' %}
+<link rel="stylesheet" href="{{ request.url_for('static', path='active_organizations.css') }}?v={{ timeline_stats_assets_version }}">
+<link rel="stylesheet" href="{{ request.url_for('static', path='distribution_stats.css') }}?v={{ timeline_stats_assets_version }}">
+{% endblock %}
+
+{% block content %}
+<div
+    class="timeline-stats-page"
+    data-page-root
+    data-page-url="/organizations/timeline-stats"
+    data-years-url="/api/organizations/distribution-stats/years"
+    data-chart-url="/api/organizations/distribution-stats/chart"
+>
+    <section class="card" aria-labelledby="timeline-stats-filters-heading">
+        <div class="card-header card-header-row">
+            <div>
+                <h2 id="timeline-stats-filters-heading" class="section-title filters-section-title">График-статистика</h2>
+            </div>
+        </div>
+
+        <div class="filters filters-shell">
+            <div class="filters-toolbar distribution-toolbar distribution-toolbar-chart">
+                <div class="filter-dropdown year-filter">
+                    <label for="timeline-year-from">Год с</label>
+                    <select id="timeline-year-from" data-year-from-select></select>
+                </div>
+                <div class="filter-dropdown year-filter">
+                    <label for="timeline-year-to">Год по</label>
+                    <select id="timeline-year-to" data-year-to-select></select>
+                </div>
+                <div class="filter-dropdown year-filter">
+                    <label for="timeline-organization-status">Статус организации</label>
+                    <select id="timeline-organization-status" data-organization-status-select>
+                        <option value="all">Все</option>
+                        <option value="active">Только действующие</option>
+                        <option value="inactive">Только недействующие</option>
+                    </select>
+                </div>
+                <div class="filter-dropdown year-filter">
+                    <label for="timeline-contract-status">Актуальный договор практики</label>
+                    <select id="timeline-contract-status" data-actual-contract-status-select>
+                        <option value="all">Все</option>
+                        <option value="with_actual_contract">Есть</option>
+                        <option value="without_actual_contract">Нет</option>
+                    </select>
+                </div>
+                <div class="filter-dropdown year-filter">
+                    <label for="timeline-page-size">Организаций на экране</label>
+                    <select id="timeline-page-size" data-page-size-select>
+                        <option value="5">5</option>
+                        <option value="8">8</option>
+                        <option value="10" selected>10</option>
+                        <option value="12">12</option>
+                        <option value="15">15</option>
+                    </select>
+                </div>
+            </div>
+            <div class="filter-footer">
+                <div class="filter-summary" data-range-summary>
+                    <strong data-range-summary-title></strong>
+                    <span class="muted" data-range-summary-text></span>
+                </div>
+                <div class="actions">
+                    <button type="button" class="btn btn-primary" data-apply-range>Применить фильтры</button>
+                    <button type="button" class="btn btn-outline" data-reset-range>Сбросить фильтры</button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="card table-card chart-card" aria-live="polite" data-chart-section>
+        <div class="table-heading chart-heading-row">
+            <strong>Диаграмма распределения</strong>
+            <div class="chart-window-controls">
+                <button type="button" class="btn btn-outline chart-nav-button" data-chart-prev>Выше</button>
+                <span class="muted" data-chart-window-meta></span>
+                <button type="button" class="btn btn-outline chart-nav-button" data-chart-next>Ниже</button>
+            </div>
+        </div>
+        <div data-chart-content></div>
+    </section>
+</div>
+
+<script id="timeline-stats-years-bootstrap" type="application/json">
+    {{ years_payload | tojson }}
+</script>
+<script id="timeline-stats-chart-bootstrap" type="application/json">
+    {{ chart_payload | tojson }}
+</script>
+
+<button type="button" class="scroll-top" data-scroll-top aria-label="Вернуться к началу">↑ Наверх</button>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{{ request.url_for('static', path='distribution_stats_shared.js') }}?v={{ timeline_stats_assets_version }}"></script>
+<script src="{{ request.url_for('static', path='timeline_stats.js') }}?v={{ timeline_stats_assets_version }}"></script>
+{% endblock %}

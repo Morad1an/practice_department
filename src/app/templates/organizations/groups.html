@@ -1,0 +1,300 @@
+{% extends "base.html" %}
+
+{% block title %}Распределение по группам{% endblock %}
+
+{% block extra_head %}
+{% set groups_assets_version = '20260424-groups-v3' %}
+<link rel="stylesheet" href="{{ request.url_for('static', path='active_organizations.css') }}?v={{ groups_assets_version }}">
+<style>
+    .groups-page .table-scroll {
+        overflow-x: auto;
+        overflow-y: visible;
+    }
+
+    .groups-page .semester-filter {
+        position: relative;
+        min-width: 360px;
+        max-width: 520px;
+    }
+
+    .groups-page .semester-filter-menu {
+        position: absolute;
+        top: calc(100% + 8px);
+        left: 0;
+        z-index: 20;
+        width: 100%;
+        max-height: 320px;
+        overflow-y: auto;
+        padding: 12px;
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        background: #ffffff;
+        color: var(--text-main);
+        opacity: 1;
+        box-shadow: 0 18px 40px rgba(15, 23, 42, 0.14);
+    }
+
+    .groups-page .semester-option {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        gap: 10px;
+        align-items: start;
+        padding: 10px 12px;
+        border-radius: 12px;
+        cursor: pointer;
+    }
+
+    .groups-page .semester-option:hover {
+        background: rgba(15, 23, 42, 0.04);
+    }
+
+    .groups-page .semester-option-count {
+        color: var(--text-soft);
+        font-size: 0.85rem;
+        white-space: nowrap;
+    }
+
+    .groups-page .data-table td.organization-col .organization-name {
+        font-size: inherit;
+        font-weight: 500;
+        color: inherit;
+    }
+
+    .groups-page .data-table td.organization-col {
+        font-size: 0.92rem;
+        color: var(--text-soft);
+    }
+
+    .groups-page .semester-note {
+        margin-top: 6px;
+        color: var(--text-soft);
+        font-size: 0.92rem;
+    }
+
+    .groups-floating-x-scroll {
+        position: fixed;
+        left: 24px;
+        right: 116px;
+        bottom: 18px;
+        z-index: 9;
+        overflow-x: auto;
+        overflow-y: hidden;
+        height: 18px;
+        padding-top: 2px;
+        border: 1px solid rgba(17, 19, 32, 0.08);
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.96);
+        box-shadow: 0 12px 30px rgba(15, 23, 42, 0.16);
+        backdrop-filter: blur(10px);
+    }
+
+    .groups-floating-x-scroll[hidden] {
+        display: none;
+    }
+
+    .groups-floating-x-scroll-inner {
+        height: 1px;
+    }
+
+    @media (max-width: 768px) {
+        .groups-page .semester-filter {
+            min-width: 100%;
+            max-width: 100%;
+        }
+
+        .groups-page .semester-filter-menu {
+            width: 100%;
+            max-width: 100%;
+        }
+
+        .groups-floating-x-scroll {
+            left: 20px;
+            right: 104px;
+            bottom: 14px;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+{% set bootstrap_state = {
+    "draft": {
+        "semester_id": filters.semester_id,
+    },
+    "applied": {
+        "semester_id": filters.semester_id,
+    },
+    "table": {
+        "sort_by": filters.sort_by,
+        "sort_dir": filters.sort_dir,
+        "custom_sort_requested": custom_sort_requested,
+    },
+    "semester_options": semester_options,
+    "default_semester_id": filters.semester_id,
+} %}
+{% set columns = [
+    {"key": "department_name", "label": "Кафедра", "class": "department-col"},
+    {"key": "study_direction_code", "label": "Шифр направления", "class": "study-direction-code-col"},
+    {"key": "study_direction_name", "label": "Направление подготовки", "class": "study-direction-name-col"},
+    {"key": "study_profile_name", "label": "Профиль обучения", "class": "study-profile-col"},
+    {"key": "group_name", "label": "Группа", "class": "group-col"},
+    {"key": "course", "label": "Курс", "class": "course-col"},
+    {"key": "distributed_quantity", "label": "Кол-во распределённых", "class": "quantity-col"},
+    {"key": "organization_name", "label": "Наименование организации", "class": "organization-col"},
+    {"key": "order_name", "label": "Номер приказа", "class": "order-col"},
+    {"key": "signing_date", "label": "Дата подписания", "class": "signing-date-col"},
+    {"key": "practice_name", "label": "Наименование практики", "class": "practice-name-col"},
+    {"key": "practice_date_begin", "label": "Дата начала", "class": "practice-date-begin-col"},
+    {"key": "practice_date_end", "label": "Дата окончания", "class": "practice-date-end-col"},
+    {"key": "practice_chief_name", "label": "Фамилия ИО руководителя", "class": "practice-chief-col"},
+] %}
+<div
+    class="groups-page"
+    data-page-root
+    data-page-url="/organizations/groups"
+    data-filter-options-url="/api/organizations/groups/filter-options"
+    data-table-url="/api/organizations/groups/table"
+    data-export-url="/api/organizations/groups/export"
+>
+    <section class="card" aria-labelledby="filters-heading">
+        <div class="card-header card-header-row">
+            <div>
+                <h2 id="filters-heading" class="section-title filters-section-title">Распределение по группам</h2>
+            </div>
+        </div>
+
+        <div class="filters filters-shell" data-filters-shell>
+            <div class="filters-toolbar">
+                <div class="filter-dropdown semester-filter" data-semester-filter>
+                    <label for="groups-semester-trigger">Семестр</label>
+                    <button
+                        id="groups-semester-trigger"
+                        type="button"
+                        class="btn filter-trigger"
+                        data-semester-trigger
+                        aria-expanded="false"
+                    >
+                        <span data-semester-trigger-text>{% if selected_semester_label %}Семестр: {{ selected_semester_label }}{% else %}Выберите семестр{% endif %}</span>
+                    </button>
+                    <div class="semester-filter-menu" data-semester-menu hidden>
+                        <div data-semester-options>
+                            {% if semester_options %}
+                                {% for option in semester_options %}
+                                    <label class="semester-option">
+                                        <input
+                                            type="radio"
+                                            name="groups-semester"
+                                            value="{{ option.value }}"
+                                            {% if option.value == filters.semester_id %}checked{% endif %}
+                                        >
+                                        <span>{{ option.label }}</span>
+                                        <span class="semester-option-count">{{ option.record_count }}</span>
+                                    </label>
+                                {% endfor %}
+                            {% else %}
+                                <div class="filter-empty">Семестры не найдены.</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="filter-footer">
+                <div class="actions">
+                    <button type="button" class="btn btn-outline" data-export-table>Выгрузить в Excel</button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="card table-card" aria-live="polite" data-table-root>
+        <div class="table-heading">
+            <strong>Результаты распределения ({{ result_count }} записей)</strong>
+        </div>
+        {% if rows %}
+            <div class="table-scroll">
+                <table class="data-table">
+                    <colgroup>
+                        <col class="index-col">
+                        {% for column in columns %}
+                            <col class="{{ column.class }}">
+                        {% endfor %}
+                    </colgroup>
+                    <thead>
+                    <tr>
+                        <th class="index-header">№</th>
+                        {% for column in columns %}
+                            {% set sort = sort_links[column.key] %}
+                            {% set aria_sort = 'none' %}
+                            {% if sort.is_active %}
+                                {% set aria_sort = 'ascending' if sort.current_direction != 'desc' else 'descending' %}
+                            {% endif %}
+                            <th class="{{ column.class }}" aria-sort="{{ aria_sort }}">
+                                <button
+                                    type="button"
+                                    class="sort-link{% if sort.is_active %} active direction-{{ sort.current_direction }}{% endif %}"
+                                    data-sort-button
+                                    data-sort-by="{{ column.key }}"
+                                    data-sort-dir="{{ sort.next_direction }}"
+                                >
+                                    {{ column.label }}
+                                </button>
+                            </th>
+                        {% endfor %}
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {% for row in rows %}
+                        <tr
+                            {% if row.organization_id %}
+                                data-organization-row
+                                data-organization-url="/organizations/{{ row.organization_id }}"
+                                title="Двойной щелчок откроет карточку организации в новой вкладке"
+                            {% endif %}
+                        >
+                            <td class="index-cell">{{ filters.offset + loop.index }}</td>
+                            {% for column in columns %}
+                                {% set value = row[column.key] %}
+                                <td class="{{ column.class }}">
+                                    {% if column.key == 'organization_name' %}
+                                        <div class="organization-name">{{ value or '—' }}</div>
+                                    {% else %}
+                                        {{ value if value is not none and value != '' else '—' }}
+                                    {% endif %}
+                                </td>
+                            {% endfor %}
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% if has_more %}
+                <div class="load-more-wrapper">
+                    <button type="button" class="btn btn-outline" data-load-more data-next-offset="{{ next_offset }}">Показать ещё</button>
+                </div>
+            {% endif %}
+        {% else %}
+            <div class="empty-state">
+                <h3 class="empty-state-title">Записи не найдены</h3>
+                <p>{% if selected_semester_label %}Для выбранного семестра нет распределений.{% else %}Выберите семестр, чтобы посмотреть распределения.{% endif %}</p>
+            </div>
+        {% endif %}
+    </section>
+</div>
+
+<script id="groups-bootstrap" type="application/json">
+    {{ bootstrap_state | tojson }}
+</script>
+
+<div class="groups-floating-x-scroll" data-floating-x-scroll hidden aria-hidden="true">
+    <div class="groups-floating-x-scroll-inner" data-floating-x-scroll-inner></div>
+</div>
+
+<button type="button" class="scroll-top" data-scroll-top aria-label="Вернуться к началу">↑ Наверх</button>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{{ request.url_for('static', path='active_organizations_table.js') }}?v={{ groups_assets_version }}"></script>
+<script src="{{ request.url_for('static', path='active_organizations_export.js') }}?v={{ groups_assets_version }}"></script>
+<script src="{{ request.url_for('static', path='groups.js') }}?v={{ groups_assets_version }}"></script>
+{% endblock %}

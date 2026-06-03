@@ -1,0 +1,19 @@
+# virtual env
+.venv/
+
+# python / type checker caches
+__pycache__/
+*.pyc
+.mypy_cache/
+
+# idea
+.idea/
+
+# env file
+.env
+
+# alembic cache
+*.log
+
+# sql dumps
+docker-db/*.sql

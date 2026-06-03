@@ -1,0 +1,406 @@
+{% extends "base.html" %}
+
+{% block title %}Направления подготовки{% endblock %}
+
+{% block extra_head %}
+{% set study_directions_assets_version = '20260424-study-directions-v3' %}
+<link rel="stylesheet" href="{{ request.url_for('static', path='active_organizations.css') }}?v={{ study_directions_assets_version }}">
+<style>
+    .study-directions-page .filter-menu {
+        width: max(100%, 360px);
+        max-width: min(480px, calc(100vw - 48px));
+    }
+
+    .study-directions-page .filter-menu-header {
+        grid-template-columns: minmax(0, 1fr) auto;
+    }
+
+    .study-directions-page .filter-clear {
+        min-width: 96px;
+    }
+
+    .study-directions-page .faculty-col {
+        width: 88px;
+    }
+
+    .study-directions-page .department-col {
+        width: 96px;
+    }
+
+    .study-directions-page .study-direction-name-col {
+        width: 170px;
+    }
+
+    .study-directions-page .study-direction-code-col {
+        width: 116px;
+    }
+
+    .study-directions-page .logo-col {
+        width: 88px;
+    }
+
+    .study-directions-page .organization-col {
+        width: 220px;
+    }
+
+    .study-directions-page .phone-col {
+        width: 260px;
+    }
+
+    .study-directions-page .digital-col {
+        width: 220px;
+    }
+
+    .study-directions-page .data-table th.phone-col,
+    .study-directions-page .data-table th.digital-col {
+        text-align: center;
+    }
+
+    .study-directions-page .data-table td.organization-col {
+        font-size: 0.92rem;
+        color: var(--text-soft);
+    }
+
+    .study-directions-page .data-table td.organization-col .organization-name {
+        font-size: inherit;
+        font-weight: 500;
+        color: inherit;
+    }
+
+    .study-directions-page .data-table td.phone-col,
+    .study-directions-page .data-table td.digital-col {
+        white-space: nowrap;
+    }
+
+    .study-directions-page .data-table td.phone-col ul,
+    .study-directions-page .data-table td.digital-col ul {
+        margin: 0;
+        padding-left: 18px;
+    }
+
+    @media (max-width: 768px) {
+        .study-directions-page .filter-menu {
+            width: 100%;
+            max-width: 100%;
+        }
+
+        .study-directions-page .data-table td.phone-col,
+        .study-directions-page .data-table td.digital-col {
+            white-space: normal;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+{% set filter_definitions = [
+    {
+        "key": "faculty_names",
+        "label": "Факультет",
+        "empty_text": "Все факультеты",
+        "options_key": "faculties",
+        "search_placeholder": "Поиск по факультету",
+    },
+    {
+        "key": "department_names",
+        "label": "Кафедра",
+        "empty_text": "Все кафедры",
+        "options_key": "departments",
+        "search_placeholder": "Поиск по кафедре",
+    },
+    {
+        "key": "study_direction_names",
+        "label": "Наименование направления",
+        "empty_text": "Все направления",
+        "options_key": "study_direction_names",
+        "search_placeholder": "Поиск по направлению",
+    },
+    {
+        "key": "study_direction_codes",
+        "label": "Шифры направления",
+        "empty_text": "Все шифры",
+        "options_key": "study_direction_codes",
+        "search_placeholder": "Поиск по шифру",
+    },
+    {
+        "key": "organization_names",
+        "label": "Наименование организации",
+        "empty_text": "Все организации",
+        "options_key": "organizations",
+        "search_placeholder": "Поиск по организации",
+    },
+] %}
+{% set bootstrap_state = {
+    "draft": {
+        "faculty_names": filters.faculty_names or [],
+        "department_names": filters.department_names or [],
+        "study_direction_names": filters.study_direction_names or [],
+        "study_direction_codes": filters.study_direction_codes or [],
+        "organization_names": filters.organization_names or [],
+    },
+    "applied": {
+        "faculty_names": filters.faculty_names or [],
+        "department_names": filters.department_names or [],
+        "study_direction_names": filters.study_direction_names or [],
+        "study_direction_codes": filters.study_direction_codes or [],
+        "organization_names": filters.organization_names or [],
+    },
+    "table": {
+        "sort_by": filters.sort_by,
+        "sort_dir": filters.sort_dir,
+        "custom_sort_requested": custom_sort_requested,
+    },
+} %}
+<div
+    class="study-directions-page"
+    data-page-root
+    data-page-url="/organizations/study-directions"
+    data-filter-options-url="/api/organizations/study-directions/filter-options"
+    data-table-url="/api/organizations/study-directions/table"
+    data-export-url="/api/organizations/study-directions/export"
+    data-logotypes-url="/api/organizations/study-directions/logotypes/batch"
+>
+    <section class="card" aria-labelledby="filters-heading">
+        <div class="card-header card-header-row">
+            <div>
+                <h2 id="filters-heading" class="section-title filters-section-title">Направления подготовки</h2>
+            </div>
+        </div>
+
+        <div class="filters filters-shell" data-filters-shell>
+            <div class="filters-toolbar">
+                {% for definition in filter_definitions %}
+                    <div
+                        class="filter-dropdown"
+                        data-filter-dropdown
+                        data-filter-key="{{ definition.key }}"
+                        data-options-key="{{ definition.options_key }}"
+                        data-empty-text="{{ definition.empty_text }}"
+                    >
+                        <label>{{ definition.label }}</label>
+                        <button type="button" class="btn filter-trigger" data-filter-trigger aria-expanded="false">
+                            <span class="filter-trigger-text" data-filter-trigger-text>{{ definition.empty_text }}</span>
+                        </button>
+                        <div class="filter-menu" data-filter-menu hidden>
+                            <div class="filter-menu-header">
+                                <input
+                                    type="search"
+                                    class="filter-search"
+                                    data-filter-search
+                                    placeholder="{{ definition.search_placeholder }}"
+                                >
+                                <button type="button" class="btn btn-outline filter-clear" data-filter-clear>Очистить</button>
+                            </div>
+                            <div class="filter-options" data-filter-options>
+                                <div class="filter-empty">Опции загружаются…</div>
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+
+            <div class="filter-footer">
+                <div class="filter-summary" data-filter-summary hidden>
+                    <strong data-filter-summary-title hidden></strong>
+                    <span class="muted" data-filter-summary-text hidden></span>
+                    <span class="pending-note" data-filter-pending-note hidden>Есть неприменённые изменения.</span>
+                </div>
+                <div class="actions">
+                    <button type="button" class="btn btn-primary" data-apply-filters>Применить фильтры</button>
+                    <button type="button" class="btn btn-outline" data-export-table>Выгрузить в Excel</button>
+                    <button type="button" class="btn btn-outline" data-reset-filters>Сбросить</button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="card table-card" aria-live="polite" data-table-root>
+        <div class="table-heading">
+            <strong>Результаты подбора ({{ result_count }} записей)</strong>
+        </div>
+        {% if rows %}
+            <div class="table-scroll">
+                <table class="data-table">
+                    <colgroup>
+                        <col class="index-col">
+                        <col class="faculty-col">
+                        <col class="department-col">
+                        <col class="study-direction-name-col">
+                        <col class="study-direction-code-col">
+                        <col class="logo-col">
+                        <col class="organization-col">
+                        <col class="phone-col">
+                        <col class="digital-col">
+                    </colgroup>
+                    <thead>
+                    <tr>
+                        <th class="index-header">№</th>
+                        {% set faculty_sort = sort_links.faculty_name %}
+                        {% set faculty_aria = 'none' %}
+                        {% if faculty_sort.is_active %}
+                            {% set faculty_aria = 'ascending' if faculty_sort.current_direction != 'desc' else 'descending' %}
+                        {% endif %}
+                        <th class="faculty-col" aria-sort="{{ faculty_aria }}">
+                            <button
+                                type="button"
+                                class="sort-link{% if faculty_sort.is_active %} active direction-{{ faculty_sort.current_direction }}{% endif %}"
+                                data-sort-button
+                                data-sort-by="faculty_name"
+                                data-sort-dir="{{ faculty_sort.next_direction }}"
+                            >
+                                Факультет
+                            </button>
+                        </th>
+                        {% set department_sort = sort_links.department_name %}
+                        {% set department_aria = 'none' %}
+                        {% if department_sort.is_active %}
+                            {% set department_aria = 'ascending' if department_sort.current_direction != 'desc' else 'descending' %}
+                        {% endif %}
+                        <th class="department-col" aria-sort="{{ department_aria }}">
+                            <button
+                                type="button"
+                                class="sort-link{% if department_sort.is_active %} active direction-{{ department_sort.current_direction }}{% endif %}"
+                                data-sort-button
+                                data-sort-by="department_name"
+                                data-sort-dir="{{ department_sort.next_direction }}"
+                            >
+                                Кафедра
+                            </button>
+                        </th>
+                        {% set study_name_sort = sort_links.study_direction_name %}
+                        {% set study_name_aria = 'none' %}
+                        {% if study_name_sort.is_active %}
+                            {% set study_name_aria = 'ascending' if study_name_sort.current_direction != 'desc' else 'descending' %}
+                        {% endif %}
+                        <th class="study-direction-name-col" aria-sort="{{ study_name_aria }}">
+                            <button
+                                type="button"
+                                class="sort-link{% if study_name_sort.is_active %} active direction-{{ study_name_sort.current_direction }}{% endif %}"
+                                data-sort-button
+                                data-sort-by="study_direction_name"
+                                data-sort-dir="{{ study_name_sort.next_direction }}"
+                            >
+                                Наименование направления
+                            </button>
+                        </th>
+                        {% set study_code_sort = sort_links.study_direction_code %}
+                        {% set study_code_aria = 'none' %}
+                        {% if study_code_sort.is_active %}
+                            {% set study_code_aria = 'ascending' if study_code_sort.current_direction != 'desc' else 'descending' %}
+                        {% endif %}
+                        <th class="study-direction-code-col" aria-sort="{{ study_code_aria }}">
+                            <button
+                                type="button"
+                                class="sort-link{% if study_code_sort.is_active %} active direction-{{ study_code_sort.current_direction }}{% endif %}"
+                                data-sort-button
+                                data-sort-by="study_direction_code"
+                                data-sort-dir="{{ study_code_sort.next_direction }}"
+                            >
+                                Шифры направления
+                            </button>
+                        </th>
+                        <th class="logo-col">Логотип</th>
+                        {% set organization_sort = sort_links.organization_name %}
+                        {% set organization_aria = 'none' %}
+                        {% if organization_sort.is_active %}
+                            {% set organization_aria = 'ascending' if organization_sort.current_direction != 'desc' else 'descending' %}
+                        {% endif %}
+                        <th class="organization-col" aria-sort="{{ organization_aria }}">
+                            <button
+                                type="button"
+                                class="sort-link{% if organization_sort.is_active %} active direction-{{ organization_sort.current_direction }}{% endif %}"
+                                data-sort-button
+                                data-sort-by="organization_name"
+                                data-sort-dir="{{ organization_sort.next_direction }}"
+                            >
+                                Наименование организации
+                            </button>
+                        </th>
+                        <th class="phone-col">Телефонные контакты</th>
+                        <th class="digital-col">Цифровые контакты</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {% for row in rows %}
+                        <tr
+                            {% if row.organization_id %}
+                                data-organization-row
+                                data-organization-url="/organizations/{{ row.organization_id }}"
+                                title="Двойной щелчок откроет карточку организации в новой вкладке"
+                            {% endif %}
+                        >
+                            <td class="index-cell">{{ filters.offset + loop.index }}</td>
+                            <td class="faculty-col">{{ row.faculty_name or '—' }}</td>
+                            <td class="department-col">{{ row.department_name or '—' }}</td>
+                            <td class="study-direction-name-col">{{ row.study_direction_name or '—' }}</td>
+                            <td class="study-direction-code-col">{{ row.study_direction_code or '—' }}</td>
+                            <td class="logo-col">
+                                <div class="avatar">
+                                    <img
+                                        src="{{ request.url_for('static', path='logo_placeholder.png') }}"
+                                        alt="Логотип организации"
+                                        class="logo-placeholder"
+                                        data-logo-img="true"
+                                        {% if row.logotype_id %}data-logo-id="{{ row.logotype_id }}"{% endif %}
+                                        loading="lazy"
+                                    >
+                                </div>
+                            </td>
+                            <td class="organization-col">
+                                <div class="organization-name">{{ row.organization_name or '—' }}</div>
+                            </td>
+                            <td class="phone-col">
+                                {% if row.phones %}
+                                    <ul>
+                                        {% for phone in row.phones %}
+                                            <li>{{ phone }}</li>
+                                        {% endfor %}
+                                    </ul>
+                                {% else %}
+                                    <span class="muted">—</span>
+                                {% endif %}
+                            </td>
+                            <td class="digital-col">
+                                {% if row.digitals %}
+                                    <ul>
+                                        {% for digital in row.digitals %}
+                                            <li>{{ digital }}</li>
+                                        {% endfor %}
+                                    </ul>
+                                {% else %}
+                                    <span class="muted">—</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% if has_more %}
+                <div class="load-more-wrapper">
+                    <button type="button" class="btn btn-outline" data-load-more data-next-offset="{{ next_offset }}">Показать ещё</button>
+                </div>
+            {% endif %}
+        {% else %}
+            <div class="empty-state">
+                <h3 class="empty-state-title">Записи не найдены</h3>
+                <p>Измените фильтры или сбросьте условия.</p>
+            </div>
+        {% endif %}
+    </section>
+</div>
+
+<script id="study-directions-bootstrap" type="application/json">
+    {{ bootstrap_state | tojson }}
+</script>
+
+<button type="button" class="scroll-top" data-scroll-top aria-label="Вернуться к началу">↑ Наверх</button>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{{ request.url_for('static', path='active_organizations_filters.js') }}?v={{ study_directions_assets_version }}"></script>
+<script src="{{ request.url_for('static', path='active_organizations_table.js') }}?v={{ study_directions_assets_version }}"></script>
+<script src="{{ request.url_for('static', path='active_organizations_export.js') }}?v={{ study_directions_assets_version }}"></script>
+<script src="{{ request.url_for('static', path='active_organizations_logos.js') }}?v={{ study_directions_assets_version }}"></script>
+<script src="{{ request.url_for('static', path='study_directions.js') }}?v={{ study_directions_assets_version }}"></script>
+{% endblock %}

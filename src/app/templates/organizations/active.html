@@ -1,0 +1,408 @@
+{% extends "base.html" %}
+
+{% block title %}Действующие организации{% endblock %}
+
+{% block extra_head %}
+{% set active_assets_version = '20260426-filters-v11' %}
+<link rel="stylesheet" href="{{ request.url_for('static', path='active_organizations.css') }}?v={{ active_assets_version }}">
+<style>
+    .active-organizations-page {
+        max-width: 1320px;
+        margin: 0 auto;
+    }
+
+    .active-organizations-page .organization-col {
+        width: 260px;
+    }
+
+    .active-organizations-page .organization-main {
+        align-items: flex-start;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+{% set filter_definitions = [
+    {
+        "key": "organization_names",
+        "label": "Организация",
+        "empty_text": "Все организации",
+        "options_key": "organizations",
+        "search_placeholder": "Поиск по организации",
+    },
+    {
+        "key": "contract_numbers",
+        "label": "Номер договора",
+        "empty_text": "Все договоры",
+        "options_key": "contract_numbers",
+        "search_placeholder": "Поиск по номеру договора",
+    },
+    {
+        "key": "settlement_names",
+        "label": "Город",
+        "empty_text": "Все города",
+        "options_key": "settlements",
+        "search_placeholder": "Поиск по городу",
+    },
+] %}
+{% set checkbox_filter_options = [
+    {"key": "only_active_organizations", "label": "Действующие организации"},
+    {"key": "only_actual_contracts", "label": "Действующие договоры"},
+    {"key": "only_university_departments", "label": "Подразделения университета"},
+] %}
+{% set contract_datatype_filter_options = [
+    "Договор о практической подготовке обучающихся",
+    "Договор о сетевой форме реализации образовательных программ",
+    "Лицензионный договор",
+    "План мероприятий",
+    "Соглашение о конфиденциальности",
+    "Соглашение о международном сотрудничестве",
+    "Соглашение о научно-техническом сотрудничестве",
+    "Соглашение о сотрудничестве",
+    "Соглашение о сотрудничестве (целевое)",
+    "Соглашение о сотрудничестве в области образования и профориентационной работы (профориентация)",
+    "Соглашения о намерениях реализации программы производственной аспирантуры",
+] %}
+{% set bootstrap_state = {
+    "draft": {
+        "organization_names": filters.organization_names or [],
+        "contract_numbers": filters.contract_numbers or [],
+        "settlement_names": filters.settlement_names or [],
+        "only_active_organizations": filters.only_active_organizations,
+        "only_actual_contracts": filters.only_actual_contracts,
+        "only_university_departments": filters.only_university_departments,
+        "contract_datatype_names": filters.contract_datatype_names or [],
+    },
+    "applied": {
+        "organization_names": filters.organization_names or [],
+        "contract_numbers": filters.contract_numbers or [],
+        "settlement_names": filters.settlement_names or [],
+        "only_active_organizations": filters.only_active_organizations,
+        "only_actual_contracts": filters.only_actual_contracts,
+        "only_university_departments": filters.only_university_departments,
+        "contract_datatype_names": filters.contract_datatype_names or [],
+    },
+    "table": {
+        "sort_by": filters.sort_by,
+        "sort_dir": filters.sort_dir,
+        "custom_sort_requested": custom_sort_requested,
+    },
+} %}
+<div
+    class="active-organizations-page"
+    data-page-root
+    data-page-url="/organizations/active"
+    data-filter-options-url="/api/organizations/active/filter-options"
+    data-table-url="/api/organizations/active/table"
+    data-export-url="/api/organizations/active/export"
+    data-logotypes-url="/api/organizations/active/logotypes/batch"
+>
+    <section class="card" aria-labelledby="filters-heading">
+        <div class="card-header card-header-row">
+            <div>
+                <h2 id="filters-heading" class="section-title filters-section-title">Действующие организации</h2>
+            </div>
+        </div>
+
+        <div class="filters filters-shell" data-filters-shell>
+            <div class="filters-toolbar">
+                {% for definition in filter_definitions %}
+                    <div
+                        class="filter-dropdown"
+                        data-filter-dropdown
+                        data-filter-key="{{ definition.key }}"
+                        data-options-key="{{ definition.options_key }}"
+                        data-empty-text="{{ definition.empty_text }}"
+                    >
+                        <label>{{ definition.label }}</label>
+                        <button type="button" class="btn filter-trigger" data-filter-trigger aria-expanded="false">
+                            <span class="filter-trigger-text" data-filter-trigger-text>{{ definition.empty_text }}</span>
+                        </button>
+                        <div class="filter-menu" data-filter-menu hidden>
+                            <div class="filter-menu-header">
+                                <input
+                                    type="search"
+                                    class="filter-search"
+                                    data-filter-search
+                                    placeholder="{{ definition.search_placeholder }}"
+                                >
+                                <button type="button" class="btn btn-outline filter-clear" data-filter-clear>Очистить</button>
+                            </div>
+                            <div class="filter-options" data-filter-options>
+                                <div class="filter-empty">Опции загружаются…</div>
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+
+            <details class="checkbox-filters-disclosure" data-checkbox-filters-disclosure>
+                <summary class="checkbox-filters-summary">
+                    <span class="checkbox-filters-summary-title">Фильтры по статусу и типу документа</span>
+                    <span class="checkbox-filters-summary-note">Можно выбрать несколько пунктов</span>
+                </summary>
+                <div class="checkbox-filters-panel" data-checkbox-filters-panel>
+                    <div class="checkbox-filters-group">
+                        {% for option in checkbox_filter_options %}
+                            <label class="filter-option filter-option-static">
+                                <input
+                                    type="checkbox"
+                                    data-static-filter-checkbox
+                                    data-filter-key="{{ option.key }}"
+                                    {% if bootstrap_state.draft[option.key] %}checked{% endif %}
+                                >
+                                <span class="filter-option-text">
+                                    <span class="filter-option-title">{{ option.label }}</span>
+                                </span>
+                            </label>
+                        {% endfor %}
+                    </div>
+
+                    <hr class="checkbox-filters-divider">
+
+                    <div class="checkbox-filters-group checkbox-filters-group-datatypes">
+                        {% for option in contract_datatype_filter_options %}
+                            <label class="filter-option filter-option-static">
+                                <input
+                                    type="checkbox"
+                                    data-datatype-filter-checkbox
+                                    value="{{ option }}"
+                                    {% if option in bootstrap_state.draft.contract_datatype_names %}checked{% endif %}
+                                >
+                                <span class="filter-option-text">
+                                    <span class="filter-option-title">{{ option }}</span>
+                                </span>
+                            </label>
+                        {% endfor %}
+                    </div>
+                </div>
+            </details>
+
+            <div class="filter-footer">
+                <div class="filter-summary" data-filter-summary hidden>
+                    <strong data-filter-summary-title hidden></strong>
+                    <span class="muted" data-filter-summary-text hidden></span>
+                    <span class="pending-note" data-filter-pending-note hidden>Есть неприменённые изменения.</span>
+                </div>
+                <div class="actions">
+                    <button type="button" class="btn btn-primary" data-apply-filters>Применить фильтры</button>
+                    <button type="button" class="btn btn-outline" data-export-table>Выгрузить в Excel</button>
+                    <button type="button" class="btn btn-outline" data-reset-filters>Сбросить</button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="card table-card" aria-live="polite" data-table-root>
+        <div class="table-heading">
+            <strong>Результаты подбора ({{ result_count }} записей)</strong>
+        </div>
+        {% if rows %}
+            <div class="table-scroll">
+                <table class="data-table">
+                    <colgroup>
+                        <col class="index-col">
+                        <col class="organization-col">
+                        <col>
+                        <col>
+                        <col>
+                        <col>
+                    </colgroup>
+                    <thead>
+                    <tr>
+                        <th class="index-header">№</th>
+                        {% set org_sort = sort_links.organization_name %}
+                        {% set org_aria = 'none' %}
+                        {% if org_sort.is_active %}
+                            {% set org_aria = 'ascending' if org_sort.current_direction != 'desc' else 'descending' %}
+                        {% endif %}
+                        <th aria-sort="{{ org_aria }}">
+                            <button
+                                type="button"
+                                class="sort-link{% if org_sort.is_active %} active direction-{{ org_sort.current_direction }}{% endif %}"
+                                data-sort-button
+                                data-sort-by="organization_name"
+                                data-sort-dir="{{ org_sort.next_direction }}"
+                            >
+                                Организация
+                            </button>
+                        </th>
+                        {% set contract_sort = sort_links.contract_number %}
+                        {% set contract_aria = 'none' %}
+                        {% if contract_sort.is_active %}
+                            {% set contract_aria = 'ascending' if contract_sort.current_direction != 'desc' else 'descending' %}
+                        {% endif %}
+                        <th aria-sort="{{ contract_aria }}">
+                            <button
+                                type="button"
+                                class="sort-link{% if contract_sort.is_active %} active direction-{{ contract_sort.current_direction }}{% endif %}"
+                                data-sort-button
+                                data-sort-by="contract_number"
+                                data-sort-dir="{{ contract_sort.next_direction }}"
+                            >
+                                Номер договора
+                            </button>
+                        </th>
+                        {% set date_sort = sort_links.signing_date %}
+                        {% set date_aria = 'none' %}
+                        {% if date_sort.is_active %}
+                            {% set date_aria = 'ascending' if date_sort.current_direction != 'desc' else 'descending' %}
+                        {% endif %}
+                        <th aria-sort="{{ date_aria }}">
+                            <button
+                                type="button"
+                                class="sort-link{% if date_sort.is_active %} active direction-{{ date_sort.current_direction }}{% endif %}"
+                                data-sort-button
+                                data-sort-by="signing_date"
+                                data-sort-dir="{{ date_sort.next_direction }}"
+                            >
+                                Дата подписания
+                            </button>
+                        </th>
+                        <th>Направления подготовки</th>
+                        <th>Контакты</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {% for row in rows %}
+                        <tr
+                            {% if row.organization_id %}
+                                data-organization-row
+                                data-organization-url="/organizations/{{ row.organization_id }}"
+                                title="Двойной щелчок откроет карточку организации в новой вкладке"
+                            {% endif %}
+                        >
+                            <td class="index-cell">{{ filters.offset + loop.index }}</td>
+                            <td>
+                                <div class="organization-main">
+                                    <div class="avatar">
+                                        <img
+                                            src="{{ request.url_for('static', path='logo_placeholder.png') }}"
+                                            alt="Логотип организации"
+                                            class="logo-placeholder"
+                                            data-logo-img="true"
+                                            {% if row.logotype_id %}data-logo-id="{{ row.logotype_id }}"{% endif %}
+                                            loading="lazy"
+                                        >
+                                    </div>
+                                    <div>
+                                        <div class="organization-name">{{ row.organization_name or '—' }}</div>
+                                        <div class="muted">{{ row.settlement_name or '—' }}</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>{{ row.contract_number or '—' }}</td>
+                            <td>{{ row.signing_date or '—' }}</td>
+                            <td>
+                                {% if row.study_fields %}
+                                    {% set preview_limit = 3 %}
+                                    {% set remaining_count = row.study_fields | length - preview_limit %}
+                                    <div data-study-fields>
+                                        {% if remaining_count > 0 %}
+                                            <div class="study-preview" data-study-preview>
+                                                <div class="study-preview-row">
+                                                    {% for study_field in row.study_fields[:2] %}
+                                                        <span class="study-pill">{{ study_field }}</span>
+                                                    {% endfor %}
+                                                </div>
+                                                <div class="study-preview-row">
+                                                    <span class="study-pill">{{ row.study_fields[2] }}</span>
+                                                    <button
+                                                        type="button"
+                                                        class="study-pill study-more-button"
+                                                        data-study-more
+                                                    >
+                                                        +{{ remaining_count }}
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <div data-study-expanded hidden>
+                                                <div class="study-grid">
+                                                    {% for study_field in row.study_fields %}
+                                                        <span class="study-pill">{{ study_field }}</span>
+                                                    {% endfor %}
+                                                </div>
+                                                <div class="study-collapse-row">
+                                                    <button
+                                                        type="button"
+                                                        class="study-pill study-more-button"
+                                                        data-study-collapse
+                                                    >
+                                                        Свернуть
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        {% else %}
+                                            <div class="study-grid">
+                                                {% for study_field in row.study_fields %}
+                                                    <span class="study-pill">{{ study_field }}</span>
+                                                {% endfor %}
+                                            </div>
+                                        {% endif %}
+                                    </div>
+                                {% else %}
+                                    <span class="muted">Нет данных</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="contact-columns">
+                                    <div class="contact-block">
+                                        <div class="muted">Телефоны</div>
+                                        {% if row.phones %}
+                                            <ul>
+                                                {% for phone in row.phones %}
+                                                    <li>{{ phone }}</li>
+                                                {% endfor %}
+                                            </ul>
+                                        {% else %}
+                                            <span class="muted">—</span>
+                                        {% endif %}
+                                    </div>
+                                    <div class="contact-block">
+                                        <div class="muted">Цифровые контакты</div>
+                                        {% if row.digitals %}
+                                            <ul>
+                                                {% for digital in row.digitals %}
+                                                    <li>{{ digital }}</li>
+                                                {% endfor %}
+                                            </ul>
+                                        {% else %}
+                                            <span class="muted">—</span>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% if has_more %}
+                <div class="load-more-wrapper">
+                    <button type="button" class="btn btn-outline" data-load-more data-next-offset="{{ next_offset }}">Показать ещё</button>
+                </div>
+            {% endif %}
+        {% else %}
+            <div class="empty-state">
+                <h3 class="empty-state-title">Записи не найдены</h3>
+                <p>Измените фильтры или сбросьте условия.</p>
+            </div>
+        {% endif %}
+    </section>
+</div>
+
+<script id="active-organizations-bootstrap" type="application/json">
+    {{ bootstrap_state | tojson }}
+</script>
+
+<button type="button" class="scroll-top" data-scroll-top aria-label="Вернуться к началу">↑ Наверх</button>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{{ request.url_for('static', path='active_organizations_filters.js') }}?v={{ active_assets_version }}"></script>
+<script src="{{ request.url_for('static', path='active_organizations_table.js') }}?v={{ active_assets_version }}"></script>
+<script src="{{ request.url_for('static', path='active_organizations_export.js') }}?v={{ active_assets_version }}"></script>
+<script src="{{ request.url_for('static', path='active_organizations_logos.js') }}?v={{ active_assets_version }}"></script>
+<script src="{{ request.url_for('static', path='active_organizations_study_fields.js') }}?v={{ active_assets_version }}"></script>
+<script src="{{ request.url_for('static', path='active_organizations.js') }}?v={{ active_assets_version }}"></script>
+{% endblock %}

@@ -1,0 +1,55 @@
+services:
+  db:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${DOCKER_DB_NAME:-tbl}
+      MYSQL_ROOT_PASSWORD: ${DOCKER_DB_PASS:-root}
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./docker-db:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      APP_ENV: ${APP_ENV:-development}
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_NAME: ${DOCKER_DB_NAME:-tbl}
+      DB_USER: root
+      DB_PASS: ${DOCKER_DB_PASS:-root}
+      REDIS_URL: redis://redis:6379/0
+      AUTH_SECRET_KEY: ${AUTH_SECRET_KEY}
+      AUTH_COOKIE_NAME: ${AUTH_COOKIE_NAME:-diplom_auth}
+      AUTH_SESSION_MAX_AGE_SECONDS: ${AUTH_SESSION_MAX_AGE_SECONDS:-43200}
+      AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-false}
+      CSRF_COOKIE_NAME: ${CSRF_COOKIE_NAME:-diplom_csrf}
+      LOGO_CACHE_TTL_SECONDS: ${LOGO_CACHE_TTL_SECONDS:-86400}
+      LOGO_BATCH_MAX_IDS: ${LOGO_BATCH_MAX_IDS:-80}
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    volumes:
+      - .:/app
+
+volumes:
+  mysql_data:

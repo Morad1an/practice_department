@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ request.state.csrf_token }}">
+    <title>Вход</title>
+    <style>
+        :root {
+            color-scheme: light;
+            --bg: #eef2fb;
+            --card: #ffffff;
+            --accent: #245bff;
+            --text: #111320;
+            --muted: #5a6175;
+            --border: #dce3f3;
+            --danger: #c62828;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            display: grid;
+            place-items: center;
+            padding: 24px;
+            background:
+                radial-gradient(circle at top left, rgba(36, 91, 255, 0.18), transparent 34%),
+                linear-gradient(160deg, #f5f7fd, #e8eefb);
+            font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+            color: var(--text);
+        }
+        .login-card {
+            width: min(440px, 100%);
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            box-shadow: 0 24px 50px rgba(15, 23, 42, 0.12);
+            padding: 32px;
+        }
+        .login-kicker {
+            margin: 0 0 10px;
+            font-size: 0.84rem;
+            text-transform: uppercase;
+            letter-spacing: 0.14rem;
+            color: var(--accent);
+        }
+        .login-title { margin: 0; font-size: 1.9rem; line-height: 1.1; }
+        .login-text { margin: 12px 0 0; color: var(--muted); line-height: 1.5; }
+        .login-form { display: grid; gap: 16px; margin-top: 28px; }
+        .login-field { display: grid; gap: 8px; }
+        .login-field-label { font-size: 0.92rem; font-weight: 600; }
+        .login-input {
+            width: 100%;
+            min-height: 48px;
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 12px 14px;
+            font: inherit;
+        }
+        .login-input:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(36, 91, 255, 0.12);
+        }
+        .login-error {
+            padding: 12px 14px;
+            border-radius: 14px;
+            background: rgba(198, 40, 40, 0.08);
+            color: var(--danger);
+            font-size: 0.92rem;
+        }
+        .login-submit {
+            min-height: 50px;
+            border: none;
+            border-radius: 16px;
+            background: linear-gradient(145deg, #1d3c99, #2d73ff);
+            color: #fff;
+            font: inherit;
+            font-weight: 700;
+            cursor: pointer;
+            box-shadow: 0 14px 28px rgba(36, 91, 255, 0.24);
+        }
+    </style>
+</head>
+<body>
+    <section class="login-card">
+        <p class="login-kicker">Цифровой кабинет</p>
+        <h1 class="login-title">Вход в систему</h1>
+        <p class="login-text">Используйте выданные администратором логин и пароль.</p>
+        <form method="post" action="{{ request.url_for('login_submit') }}" class="login-form">
+            {% if login_error %}
+                <div class="login-error">{{ login_error }}</div>
+            {% endif %}
+            <input type="hidden" name="next" value="{{ next_path }}">
+            <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+            <label class="login-field">
+                <span class="login-field-label">Логин</span>
+                <input type="text" name="username" class="login-input" value="{{ username_value }}" autocomplete="username" required>
+            </label>
+            <label class="login-field">
+                <span class="login-field-label">Пароль</span>
+                <input type="password" name="password" class="login-input" autocomplete="current-password" required>
+            </label>
+            <button type="submit" class="login-submit">Войти</button>
+        </form>
+    </section>
+</body>
+</html>

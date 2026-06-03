@@ -1,0 +1,660 @@
+{% extends "base.html" %}
+
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block extra_head %}
+{% set organization_detail_assets_version = '20260426-5' %}
+<link rel="stylesheet" href="{{ request.url_for('static', path='organization_detail.css') }}?v={{ organization_detail_assets_version }}">
+{% endblock %}
+
+{% block content %}
+<section class="card organization-card-page">
+    <div class="card-header card-header-row organization-card-header">
+        <div>
+            <p class="organization-card-kicker">Карточка организации</p>
+            <h2 class="section-title organization-card-title">{{ page_heading }}</h2>
+        </div>
+        <div class="organization-card-status">
+            <span class="organization-status-pill{% if organization.is_active and not create_mode %} is-active{% endif %}">
+                {% if create_mode %}
+                    Новая запись
+                {% elif organization.is_active %}
+                    Действующая
+                {% else %}
+                    Неактуальная
+                {% endif %}
+            </span>
+        </div>
+    </div>
+
+    <form
+        class="organization-card-form"
+        data-organization-card-form
+        data-create-mode="{{ 'true' if create_mode else 'false' }}"
+        data-can-edit="{{ 'true' if can_edit else 'false' }}"
+        data-save-url="{% if create_mode %}{{ request.url_for('create_organization_api') }}{% else %}{{ request.url_for('update_organization_api', organization_id=organization.id) }}{% endif %}"
+        data-contact-type-options='{{ contact_type_options | tojson | forceescape }}'
+        {% if organization.map_query %}data-map-query="{{ organization.map_query }}"{% endif %}
+        {% if not create_mode %}
+            data-organization-id="{{ organization.id }}"
+            data-delete-url="{{ request.url_for('delete_organization_api', organization_id=organization.id) }}"
+            data-add-document-url="{{ request.url_for('add_organization_document_api', organization_id=organization.id) }}"
+            data-upload-logo-url="{{ request.url_for('upload_organization_logo_api', organization_id=organization.id) }}"
+            data-delete-logo-url="{{ request.url_for('delete_organization_logo_api', organization_id=organization.id) }}"
+            data-logo-max-bytes="1048576"
+        {% endif %}
+    >
+        <script type="application/json" data-study-field-options-json>{{ study_field_options | tojson }}</script>
+        <script type="application/json" data-requisite-type-options-json>{{ requisite_type_options | tojson }}</script>
+        <div class="organization-form-status" data-form-status hidden></div>
+        <div class="organization-toast" data-organization-toast hidden></div>
+
+        <div class="organization-card-layout">
+            <div class="organization-main-column">
+                <div class="organization-card-grid">
+                    <label class="organization-field organization-field-full">
+                        <span class="organization-field-label">Краткое наименование <span class="organization-required-mark">*</span></span>
+                        <input
+                            type="text"
+                            name="name_short"
+                            value="{{ organization.name_short or '' }}"
+                            placeholder="Не указано"
+                            required
+                        >
+                    </label>
+
+                    <label class="organization-field organization-field-full">
+                        <span class="organization-field-label">Полное наименование <span class="organization-required-mark">*</span></span>
+                        <textarea name="name_long" rows="3" placeholder="Не указано" required>{{ organization.name_long or '' }}</textarea>
+                    </label>
+
+                    <div class="organization-field organization-field-full">
+                        <span class="organization-field-label">Населённый пункт <span class="organization-required-mark">*</span></span>
+                        <div class="organization-field-inline">
+                            <input
+                                type="text"
+                                name="settlement_name"
+                                list="organization-settlement-options"
+                                value="{{ organization.settlement_name or '' }}"
+                                placeholder="Начните вводить город"
+                                autocomplete="off"
+                                required
+                            >
+                            <datalist id="organization-settlement-options">
+                                {% for option in settlement_options or [] %}
+                                    <option value="{{ option.label }}"></option>
+                                {% endfor %}
+                            </datalist>
+                            {% if not create_mode %}
+                                <button
+                                    type="button"
+                                    class="btn btn-outline"
+                                    data-show-on-map
+                                    {% if not organization.settlement_name and not organization.map_query %}disabled{% endif %}
+                                >
+                                    Показать на карте
+                                </button>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <label class="organization-field">
+                        <span class="organization-field-label">ФИО руководителя</span>
+                        <input
+                            type="text"
+                            name="chief_name"
+                            value="{{ organization.chief_name or '' }}"
+                            placeholder="Не указано"
+                        >
+                    </label>
+
+                    <label class="organization-field">
+                        <span class="organization-field-label">Должность руководителя</span>
+                        <input
+                            type="text"
+                            name="chief_post"
+                            value="{{ organization.chief_post or '' }}"
+                            placeholder="Не указано"
+                        >
+                    </label>
+
+                    <div class="organization-field organization-field-full">
+                        <span class="organization-field-label">Профильные направления</span>
+                        <div class="organization-study-editor" data-study-field-editor>
+                            <div class="organization-study-grid" data-study-field-list>
+                                {% for study_field in organization.study_fields %}
+                                    <span class="organization-study-pill organization-study-pill-editable" data-study-field-chip>
+                                        <input type="hidden" name="study_field_id" value="{{ study_field.id }}">
+                                        <span>{{ study_field.label }}</span>
+                                        <button type="button" class="organization-chip-remove" data-remove-study-field aria-label="Убрать направление">×</button>
+                                    </span>
+                                {% endfor %}
+                            </div>
+                            <div class="organization-study-add-row">
+                                <input
+                                    type="text"
+                                    class="organization-study-search"
+                                    data-study-field-search
+                                    list="organization-study-field-options"
+                                    placeholder="Начните вводить направление"
+                                    autocomplete="off"
+                                >
+                                <datalist id="organization-study-field-options">
+                                    {% for option in study_field_options or [] %}
+                                        <option value="{{ option.label }}"></option>
+                                    {% endfor %}
+                                </datalist>
+                                <button type="button" class="btn btn-outline" data-add-study-field>Добавить</button>
+                            </div>
+                            <div class="organization-placeholder" data-empty-study-fields-note {% if organization.study_fields %}hidden{% endif %}>
+                                Направления подготовки пока не заполнены.
+                            </div>
+                        </div>
+                    </div>
+
+                    <label class="organization-field organization-field-full">
+                        <span class="organization-field-label">Заметки</span>
+                        <textarea name="notes" rows="5" placeholder="Заметок пока нет">{{ organization.notes or '' }}</textarea>
+                    </label>
+                </div>
+            </div>
+
+            <aside class="organization-side-column">
+                <div class="organization-logo-card">
+                    <div class="organization-logo-frame" data-logo-frame>
+                        {% if organization.logo_data_url %}
+                            <img src="{{ organization.logo_data_url }}" alt="Логотип организации" class="organization-logo-image" data-logo-image>
+                        {% else %}
+                            <div class="organization-logo-placeholder" data-logo-placeholder>Логотип<br>не загружен</div>
+                        {% endif %}
+                    </div>
+                    <div class="organization-logo-actions">
+                        {% if create_mode %}
+                            <div class="organization-placeholder organization-logo-note">
+                                Загрузка логотипа будет доступна после создания организации.
+                            </div>
+                        {% elif can_edit %}
+                            <input
+                                type="file"
+                                accept=".png,.jpg,.jpeg,.gif,image/png,image/jpeg,image/gif"
+                                data-logo-file-input
+                                hidden
+                            >
+                            {% if not organization.logo_data_url %}
+                            <button type="button" class="btn btn-outline" data-upload-logo-trigger>
+                                {% if organization.logo_data_url %}Заменить логотип{% else %}Загрузить логотип{% endif %}
+                            </button>
+                            {% else %}
+                            <button
+                                type="button"
+                                class="btn btn-outline"
+                                data-delete-logo
+                            >
+                                Удалить логотип
+                            </button>
+                            {% endif %}
+                        {% endif %}
+                    </div>
+                    {% if not create_mode %}
+                        <div class="organization-logo-hint">PNG, JPEG и GIF до 1 МБ.</div>
+                    {% endif %}
+                    <label class="organization-checkbox">
+                        <input type="checkbox" name="is_university_department" {% if organization.is_university_department %}checked{% endif %}>
+                        <span>Подразделение университета</span>
+                    </label>
+                    <label class="organization-checkbox">
+                        <input type="checkbox" name="is_active" {% if organization.is_active %}checked{% endif %}>
+                        <span>Действующая организация</span>
+                    </label>
+                </div>
+            </aside>
+        </div>
+
+        <section class="organization-block">
+            <div class="organization-block-header">
+                <div>
+                    <h3 class="organization-block-title">Связанные документы</h3>
+                    <p class="organization-block-description">
+                        {% if create_mode %}
+                            Документы можно будет добавить после создания организации.
+                        {% else %}
+                            Блок построен на основе существующих договоров организации.
+                        {% endif %}
+                    </p>
+                </div>
+                {% if can_edit %}
+                    <button
+                        type="button"
+                        class="btn btn-outline"
+                        data-add-document
+                        {% if create_mode %}disabled{% endif %}
+                    >
+                        Добавить документ
+                    </button>
+                {% endif %}
+            </div>
+
+            {% if not create_mode %}
+                <div class="organization-document-editor" data-document-editor hidden>
+                    <div class="organization-document-editor-grid">
+                        <label class="organization-field">
+                            <span class="organization-field-label">Тип документа <span class="organization-required-mark">*</span></span>
+                            <select name="document_datatype_id" data-document-field data-document-required required disabled>
+                                <option value="">Выберите тип</option>
+                                {% for option in document_type_options %}
+                                    <option value="{{ option.id }}">{{ option.label }}</option>
+                                {% endfor %}
+                            </select>
+                        </label>
+                        <label class="organization-field">
+                            <span class="organization-field-label">Номер договора (внутренний) <span class="organization-required-mark">*</span></span>
+                            <input type="text" name="document_name_primary" value="" placeholder="Например, 123/Р-1" data-document-field data-document-required required disabled>
+                        </label>
+                        <label class="organization-field">
+                            <span class="organization-field-label">Номер договора (внешний)</span>
+                            <input type="text" name="document_name_secondary" value="" placeholder="Необязательно" data-document-field>
+                        </label>
+                        <label class="organization-field">
+                            <span class="organization-field-label">Дата заключения</span>
+                            <input type="date" name="document_signing_date" value="" data-document-field>
+                        </label>
+                        <label class="organization-field">
+                            <span class="organization-field-label">ФИО руководителя по договору</span>
+                            <input type="text" name="document_chief_name" value="" placeholder="Необязательно" data-document-field>
+                        </label>
+                        <label class="organization-field">
+                            <span class="organization-field-label">Должность руководителя по договору</span>
+                            <input type="text" name="document_chief_post" value="" placeholder="Необязательно" data-document-field>
+                        </label>
+                    </div>
+                    <div class="organization-document-editor-actions">
+                        <button type="button" class="btn btn-outline" data-cancel-document>Отмена</button>
+                        <button type="button" class="btn btn-primary" data-submit-document>Сохранить документ</button>
+                    </div>
+                </div>
+
+                <div class="organization-document-modal" data-document-modal hidden>
+                    <div class="organization-document-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="organization-document-modal-title">
+                        <div class="organization-confirm-header">
+                            <h3 class="organization-confirm-title" id="organization-document-modal-title" data-document-modal-title>Документ</h3>
+                            <button type="button" class="btn btn-outline organization-modal-close-button" data-close-document-modal>Закрыть</button>
+                        </div>
+                        <div class="organization-document-modal-readonly">
+                            <div class="organization-document-readonly-item">
+                                <span class="organization-field-label">Организация</span>
+                                <div class="organization-document-readonly-value" data-document-modal-org-name></div>
+                            </div>
+                            <div class="organization-document-readonly-item">
+                                <span class="organization-field-label">Фактическое местоположение</span>
+                                <div class="organization-document-readonly-value" data-document-modal-org-address></div>
+                            </div>
+                            <div class="organization-document-readonly-item">
+                                <span class="organization-field-label">Тип документа</span>
+                                <div class="organization-document-readonly-value" data-document-modal-datatype></div>
+                            </div>
+                        </div>
+                        <div class="organization-document-editor-grid organization-document-modal-grid">
+                            <label class="organization-field">
+                                <span class="organization-field-label">Номер договора (внутренний)</span>
+                                <input type="text" name="modal_document_name_primary" value="">
+                            </label>
+                            <label class="organization-field">
+                                <span class="organization-field-label">Номер договора (внешний)</span>
+                                <input type="text" name="modal_document_name_secondary" value="">
+                            </label>
+                            <label class="organization-field">
+                                <span class="organization-field-label">Дата заключения</span>
+                                <input type="date" name="modal_document_signing_date" value="">
+                            </label>
+                            <label class="organization-field">
+                                <span class="organization-field-label">ФИО руководителя по договору</span>
+                                <input type="text" name="modal_document_chief_name" value="">
+                            </label>
+                            <label class="organization-field">
+                                <span class="organization-field-label">Должность руководителя по договору</span>
+                                <input type="text" name="modal_document_chief_post" value="">
+                            </label>
+                            <label class="organization-checkbox organization-document-modal-checkbox">
+                                <input type="checkbox" name="modal_document_is_actual">
+                                <span>Актуальный договор</span>
+                            </label>
+                        </div>
+                        <div class="organization-document-modal-file-row">
+                            <div class="organization-field organization-field-full" data-document-modal-pdf-upload>
+                                <span class="organization-field-label">PDF-файл документа</span>
+                                <input type="file" name="modal_document_pdf_file" accept=".pdf,application/pdf" data-document-modal-pdf-input hidden>
+                                <div class="organization-file-picker">
+                                    <button type="button" class="btn btn-outline" data-document-modal-pdf-trigger>Выбрать PDF</button>
+                                    <span class="organization-file-picker-name" data-document-modal-pdf-name>Файл не выбран</span>
+                                </div>
+                            </div>
+                            <a href="#" target="_blank" rel="noopener" class="btn btn-outline" data-document-modal-pdf-link hidden>Открыть текущий PDF</a>
+                            <button type="button" class="btn organization-danger-button" data-document-modal-delete-pdf hidden>Удалить PDF</button>
+                        </div>
+                        <div class="organization-document-editor-actions">
+                            <button type="button" class="btn btn-outline" data-close-document-modal>Отмена</button>
+                            <button type="button" class="btn btn-primary" data-save-document-modal>Сохранить документ</button>
+                        </div>
+                    </div>
+                </div>
+            {% endif %}
+
+            {% if organization.document_groups %}
+                <div class="organization-documents-list" data-documents-list>
+                    {% for group in organization.document_groups %}
+                        <div class="organization-document-group" data-document-group data-datatype-id="{{ group.datatype_id or '' }}">
+                            {% set actual_document = group.actual_document %}
+                            <div
+                                class="organization-document-item{% if not actual_document %} is-empty-current{% endif %}"
+                                {% if actual_document %}
+                                    data-document-row
+                                    data-document-id="{{ actual_document.id }}"
+                                    data-update-url="{{ request.url_for('update_organization_document_api', organization_id=organization.id, document_id=actual_document.id) }}"
+                                    data-document-title="{{ actual_document.title }}"
+                                    data-document-datatype-label="{{ actual_document.datatype_label or group.datatype_label }}"
+                                    data-document-name-primary="{{ actual_document.name_primary or '' }}"
+                                    data-document-name-secondary="{{ actual_document.name_secondary or '' }}"
+                                    data-document-chief-name="{{ actual_document.chief_name or '' }}"
+                                    data-document-chief-post="{{ actual_document.chief_post or '' }}"
+                                    data-document-signing-date="{{ actual_document.signing_date.isoformat() if actual_document.signing_date else '' }}"
+                                    data-document-is-actual="{{ 'true' if actual_document.is_actual else 'false' }}"
+                                    {% if actual_document.pdf_url %}data-document-pdf-url="{{ actual_document.pdf_url }}"{% endif %}
+                                    data-delete-pdf-url="{{ request.url_for('delete_organization_document_pdf_api', organization_id=organization.id, document_id=actual_document.id) }}"
+                                    data-document-pdf-filename="{{ actual_document.pdf_filename or '' }}"
+                                {% endif %}
+                            >
+                                <div class="organization-document-meta">
+                                    {% if actual_document %}
+                                        <strong>{{ actual_document.title }}</strong>
+                                        <div class="muted">
+                                            <span>{{ actual_document.datatype_label or group.datatype_label }}</span>
+                                            {% if actual_document.name_secondary %} · {{ actual_document.name_secondary }}{% endif %}
+                                            {% if actual_document.signing_date %} · {{ actual_document.signing_date.strftime('%d.%m.%Y') }}{% endif %}
+                                        </div>
+                                    {% else %}
+                                        <strong>{{ group.datatype_label }}</strong>
+                                        <div class="muted">Актуальный документ этого типа сейчас отсутствует.</div>
+                                    {% endif %}
+                                </div>
+                                <div class="organization-document-actions">
+                                    {% if group.archived_documents %}
+                                        <button
+                                            type="button"
+                                            class="btn btn-outline"
+                                            data-toggle-document-archive
+                                            aria-expanded="false"
+                                        >
+                                            Архив
+                                        </button>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="organization-document-archive-panel" data-document-archive-panel hidden>
+                                {% if group.archived_documents %}
+                                    <div class="organization-document-archive-list">
+                                        {% for document in group.archived_documents %}
+                                            <div
+                                                class="organization-document-item is-archived"
+                                                data-document-row
+                                                data-document-id="{{ document.id }}"
+                                                data-update-url="{{ request.url_for('update_organization_document_api', organization_id=organization.id, document_id=document.id) }}"
+                                                data-document-title="{{ document.title }}"
+                                                data-document-datatype-label="{{ document.datatype_label or group.datatype_label }}"
+                                                data-document-name-primary="{{ document.name_primary or '' }}"
+                                                data-document-name-secondary="{{ document.name_secondary or '' }}"
+                                                data-document-chief-name="{{ document.chief_name or '' }}"
+                                                data-document-chief-post="{{ document.chief_post or '' }}"
+                                                data-document-signing-date="{{ document.signing_date.isoformat() if document.signing_date else '' }}"
+                                                data-document-is-actual="{{ 'true' if document.is_actual else 'false' }}"
+                                                {% if document.pdf_url %}data-document-pdf-url="{{ document.pdf_url }}"{% endif %}
+                                                data-delete-pdf-url="{{ request.url_for('delete_organization_document_pdf_api', organization_id=organization.id, document_id=document.id) }}"
+                                                data-document-pdf-filename="{{ document.pdf_filename or '' }}"
+                                            >
+                                                <div class="organization-document-meta">
+                                                    <strong>{{ document.title }}</strong>
+                                                    <div class="muted">
+                                                        <span>{{ document.datatype_label or group.datatype_label }}</span>
+                                                        {% if document.name_secondary %} · {{ document.name_secondary }}{% endif %}
+                                                        {% if document.signing_date %} · {{ document.signing_date.strftime('%d.%m.%Y') }}{% endif %}
+                                                    </div>
+                                                </div>
+                                                <div class="organization-document-actions">
+                                                    <span class="organization-status-pill is-archived">В архиве</span>
+                                                </div>
+                                            </div>
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="organization-placeholder" data-documents-empty-note>Связанные документы пока отсутствуют.</div>
+            {% endif %}
+        </section>
+
+        <section class="organization-block organization-collapsible" data-collapsible-section>
+            <button type="button" class="organization-section-toggle" data-section-toggle aria-expanded="false">
+                <span>Контакты руководителей организации</span>
+                <span class="organization-section-toggle-icon">+</span>
+            </button>
+            <div class="organization-section-panel" data-section-panel hidden>
+                {% if organization.leader_contacts %}
+                    <div class="organization-table-wrapper">
+                        <table class="organization-data-table">
+                            <thead>
+                            <tr>
+                                <th>Контактное лицо</th>
+                                <th>Тип контакта</th>
+                                <th>Контактные данные</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            {% for row in organization.leader_contacts %}
+                                <tr>
+                                    <td>
+                                        <strong>{{ row.contact_name or '—' }}</strong>
+                                        <div class="muted">{{ row.contact_post or '—' }}</div>
+                                    </td>
+                                    <td>{{ row.contact_type or '—' }}</td>
+                                    <td>{{ row.contact_value or '—' }}</td>
+                                </tr>
+                            {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="organization-placeholder">Контакты руководителей не заполнены.</div>
+                {% endif %}
+            </div>
+        </section>
+
+        <section class="organization-block organization-collapsible" data-collapsible-section>
+            <button type="button" class="organization-section-toggle" data-section-toggle aria-expanded="true">
+                <span>Контакты организации</span>
+                <span class="organization-section-toggle-icon">-</span>
+            </button>
+            <div class="organization-section-panel" data-section-panel>
+                <div class="organization-block-header organization-subheader">
+                    <label class="organization-field organization-field-website">
+                        <span class="organization-field-label">Официальный сайт</span>
+                        <input
+                            type="url"
+                            name="website"
+                            value="{{ organization.website or '' }}"
+                            placeholder="Не указан"
+                        >
+                    </label>
+                    <button type="button" class="btn btn-outline" data-add-contact>Добавить контактное лицо</button>
+                </div>
+
+                <div class="organization-contact-list" data-contacts-list>
+                    {% for group in organization.organization_contact_groups %}
+                        <div class="organization-contact-card" data-contact-card data-client-entity-key="saved-{{ group.entity_id }}">
+                            <input type="hidden" name="contact_entity_id" value="{{ group.entity_id }}">
+                            <div class="organization-contact-card-header">
+                                <div class="organization-contact-person-fields">
+                                    <input
+                                        type="text"
+                                        name="contact_name"
+                                        value="{{ group.contact_name or '' }}"
+                                        placeholder="Контактное лицо"
+                                    >
+                                    <input
+                                        type="text"
+                                        name="contact_post"
+                                        value="{{ group.contact_post or '' }}"
+                                        placeholder="Должность"
+                                    >
+                                </div>
+                                <button type="button" class="btn organization-contact-delete-person" data-remove-contact-card>Удалить контактное лицо</button>
+                            </div>
+                            <div class="organization-contact-methods" data-contact-methods>
+                                {% for row in group.contacts %}
+                                    <div class="organization-contact-method-row" data-contact-method-row>
+                                        <input type="hidden" name="contact_data_id" value="{{ row.data_id or '' }}">
+                                        <select name="contact_type_id">
+                                            <option value="">Выберите тип</option>
+                                            {% for option in contact_type_options %}
+                                                <option value="{{ option.id }}" {% if row.contact_type_id == option.id %}selected{% endif %}>{{ option.label }}</option>
+                                            {% endfor %}
+                                        </select>
+                                        <input
+                                            type="text"
+                                            name="contact_value"
+                                            value="{{ row.contact_value or '' }}"
+                                            placeholder="Контактные данные"
+                                        >
+                                        <button type="button" class="organization-contact-method-remove" data-remove-contact-row aria-label="Удалить контакт">×</button>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                            <button type="button" class="btn btn-outline organization-contact-add-method" data-add-contact-method>Добавить контактные данные</button>
+                        </div>
+                    {% endfor %}
+                </div>
+                <div class="organization-placeholder organization-contacts-empty-note" data-empty-contacts-note {% if organization.organization_contact_groups %}hidden{% endif %}>
+                    Контакты организации пока отсутствуют. Добавьте первую запись кнопкой выше.
+                </div>
+            </div>
+        </section>
+
+        <section class="organization-block organization-collapsible" data-collapsible-section>
+            <button type="button" class="organization-section-toggle" data-section-toggle aria-expanded="{{ 'true' if create_mode else 'false' }}">
+                <span>Реквизиты организации</span>
+                <span class="organization-section-toggle-icon">+</span>
+            </button>
+            <div class="organization-section-panel" data-section-panel {% if not create_mode %}hidden{% endif %}>
+                <div class="organization-requisites-grid" data-requisites-list>
+                    {% for requisite in organization.requisites %}
+                        {% set requisite_base_label = requisite.base_label or requisite.label %}
+                        <div class="organization-requisite-item" data-requisite-base-label="{{ requisite_base_label }}" data-requisite-custom-label="{{ requisite.custom_label or '' }}">
+                            <input type="hidden" name="requisite_id" value="{{ requisite.id }}">
+                            <input type="hidden" name="requisite_type_id" value="{{ requisite.type_id }}">
+                            {% if requisite_base_label != 'ИНН' %}
+                                <button type="button" class="organization-icon-remove" data-remove-requisite aria-label="Удалить реквизит">×</button>
+                            {% endif %}
+                            <span class="organization-requisite-label" data-requisite-label-text>
+                                {{ requisite.label }}{% if create_mode and requisite.label == 'ИНН' %} <span class="organization-required-mark">*</span>{% endif %}
+                            </span>
+                            <div class="organization-requisite-input-row">
+                                {% if requisite_base_label == 'Другое' %}
+                                    <input
+                                        type="text"
+                                        class="organization-requisite-other-title"
+                                        value="{{ requisite.custom_label or '' }}"
+                                        placeholder="Подпись, например ИНН"
+                                        data-requisite-other-title
+                                    >
+                                {% endif %}
+                                <input
+                                    type="text"
+                                    class="organization-requisite-value-input"
+                                    name="requisite_value"
+                                    value="{{ requisite.value or '' }}"
+                                    placeholder="Не заполнено"
+                                    data-requisite-value-input
+                                    data-requisite-label="{{ requisite_base_label | lower }}"
+                                    {% if create_mode and requisite.label == 'ИНН' %}data-create-required-inn="true"{% endif %}
+                                >
+                            </div>
+                        </div>
+                    {% endfor %}
+                    {% if create_mode %}
+                        {% set has_inn_requisite = false %}
+                        {% for requisite in organization.requisites %}
+                            {% if requisite.label == 'ИНН' %}
+                                {% set has_inn_requisite = true %}
+                            {% endif %}
+                        {% endfor %}
+                        {% if not has_inn_requisite %}
+                            {% for requisite_type in requisite_type_options %}
+                                {% if requisite_type.label == 'ИНН' %}
+                                    <div class="organization-requisite-item" data-requisite-base-label="{{ requisite_type.label }}" data-requisite-custom-label="">
+                                        <input type="hidden" name="requisite_id" value="">
+                                        <input type="hidden" name="requisite_type_id" value="{{ requisite_type.id }}">
+                                        <span class="organization-requisite-label" data-requisite-label-text>
+                                            {{ requisite_type.label }} <span class="organization-required-mark">*</span>
+                                        </span>
+                                        <div class="organization-requisite-input-row">
+                                            <input
+                                                type="text"
+                                                class="organization-requisite-value-input"
+                                                name="requisite_value"
+                                                value=""
+                                                placeholder="Не заполнено"
+                                                data-requisite-value-input
+                                                data-requisite-label="{{ requisite_type.label | lower }}"
+                                                data-create-required-inn="true"
+                                            >
+                                        </div>
+                                    </div>
+                                {% endif %}
+                            {% endfor %}
+                        {% endif %}
+                    {% endif %}
+                </div>
+                <div class="organization-requisite-add-row">
+                    <select data-requisite-type-select>
+                        <option value="">Выберите реквизит</option>
+                    </select>
+                    <button type="button" class="btn btn-outline" data-add-requisite>Добавить реквизит</button>
+                </div>
+            </div>
+        </section>
+
+        {% if can_edit %}
+            <div class="organization-form-actions">
+                {% if not create_mode %}
+                    <button type="button" class="btn organization-danger-button" data-delete-organization>Удалить организацию</button>
+                {% else %}
+                    <span class="muted">После создания организации здесь появится действие удаления.</span>
+                {% endif %}
+                <div class="organization-form-actions-right">
+                    <button type="reset" class="btn btn-outline">Отменить изменения</button>
+                    <button type="button" class="btn organization-save-button" data-save-organization>
+                        {% if create_mode %}Сохранить организацию{% else %}Сохранить изменения{% endif %}
+                    </button>
+                </div>
+            </div>
+        {% endif %}
+        <div class="organization-confirm-modal" data-confirm-modal hidden>
+            <div class="organization-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="organization-confirm-title">
+                <div class="organization-confirm-header">
+                    <h3 class="organization-confirm-title" id="organization-confirm-title" data-confirm-title>РџРѕРґС‚РІРµСЂР¶РґРµРЅРёРµ</h3>
+                </div>
+                <p class="organization-confirm-message" data-confirm-message></p>
+                <div class="organization-confirm-actions">
+                    <button type="button" class="btn btn-outline" data-confirm-cancel>РћС‚РјРµРЅР°</button>
+                    <button type="button" class="btn btn-primary" data-confirm-submit>РџРѕРґС‚РІРµСЂРґРёС‚СЊ</button>
+                </div>
+            </div>
+        </div>
+    </form>
+</section>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{{ request.url_for('static', path='organization_detail.js') }}?v={{ organization_detail_assets_version }}"></script>
+{% endblock %}

@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+
+{% block title %}Статистика распределения{% endblock %}
+
+{% block extra_head %}
+{% set distribution_stats_assets_version = '20260426-distribution-stats-v3' %}
+<link rel="stylesheet" href="{{ request.url_for('static', path='active_organizations.css') }}?v={{ distribution_stats_assets_version }}">
+<link rel="stylesheet" href="{{ request.url_for('static', path='distribution_stats.css') }}?v={{ distribution_stats_assets_version }}">
+{% endblock %}
+
+{% block content %}
+<div
+    class="distribution-stats-page"
+    data-page-root
+    data-page-url="/organizations/distribution-stats"
+    data-years-url="/api/organizations/distribution-stats/years"
+    data-table-url="/api/organizations/distribution-stats/table"
+    data-logotypes-url="/api/organizations/active/logotypes/batch"
+>
+    <section class="card" aria-labelledby="distribution-stats-filters-heading">
+        <div class="card-header card-header-row">
+            <div>
+                <h2 id="distribution-stats-filters-heading" class="section-title filters-section-title">Статистика распределения</h2>
+            </div>
+        </div>
+
+        <div class="filters filters-shell">
+            <div class="filters-toolbar distribution-toolbar">
+                <div class="filter-dropdown year-filter">
+                    <label for="distribution-year-from">Год с</label>
+                    <select id="distribution-year-from" data-year-from-select></select>
+                </div>
+                <div class="filter-dropdown year-filter">
+                    <label for="distribution-year-to">Год по</label>
+                    <select id="distribution-year-to" data-year-to-select></select>
+                </div>
+                <div class="filter-dropdown year-filter">
+                    <label for="distribution-organization-status">Статус организации</label>
+                    <select id="distribution-organization-status" data-organization-status-select>
+                        <option value="all">Все</option>
+                        <option value="active">Только действующие</option>
+                        <option value="inactive">Только недействующие</option>
+                    </select>
+                </div>
+                <div class="filter-dropdown year-filter">
+                    <label for="distribution-contract-status">Актуальный договор практики</label>
+                    <select id="distribution-contract-status" data-actual-contract-status-select>
+                        <option value="all">Все</option>
+                        <option value="with_actual_contract">Есть</option>
+                        <option value="without_actual_contract">Нет</option>
+                    </select>
+                </div>
+            </div>
+            <div class="filter-footer">
+                <div class="filter-summary" data-range-summary>
+                    <strong data-range-summary-title></strong>
+                    <span class="muted" data-range-summary-text></span>
+                </div>
+                <div class="actions">
+                    <button type="button" class="btn btn-primary" data-apply-range>Применить фильтры</button>
+                    <button type="button" class="btn btn-outline" data-reset-range>Сбросить фильтры</button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="card table-card distribution-table-card" aria-live="polite" data-table-section>
+        <div class="table-heading">
+            <strong>Сводная таблица распределения</strong>
+        </div>
+        <div data-table-content></div>
+    </section>
+</div>
+
+<script id="distribution-stats-years-bootstrap" type="application/json">
+    {{ years_payload | tojson }}
+</script>
+<script id="distribution-stats-table-bootstrap" type="application/json">
+    {{ table_payload | tojson }}
+</script>
+
+<button type="button" class="scroll-top" data-scroll-top aria-label="Вернуться к началу">↑ Наверх</button>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{{ request.url_for('static', path='active_organizations_logos.js') }}?v={{ distribution_stats_assets_version }}"></script>
+<script src="{{ request.url_for('static', path='distribution_stats_shared.js') }}?v={{ distribution_stats_assets_version }}"></script>
+<script src="{{ request.url_for('static', path='distribution_stats.js') }}?v={{ distribution_stats_assets_version }}"></script>
+{% endblock %}
