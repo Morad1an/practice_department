@@ -1,6 +1,6 @@
 (() => {
     const namespace = window.DistributionStatsPage || (window.DistributionStatsPage = {});
-    const storageKey = "distribution-stats:year-range:v1";
+    const storageKey = "distribution-stats:year-range:v2";
     const palette = [
         "#1d4ed8",
         "#0f766e",
@@ -33,15 +33,12 @@
             };
         }
 
-        const fallbackYears = availableYears.length > 4
-            ? availableYears.slice(-4)
-            : availableYears;
         const defaultYearFrom = availableYears.includes(normalizeYear(payload?.default_year_from))
             ? normalizeYear(payload.default_year_from)
-            : fallbackYears[0];
+            : availableYears[0];
         const defaultYearTo = availableYears.includes(normalizeYear(payload?.default_year_to))
             ? normalizeYear(payload.default_year_to)
-            : fallbackYears[fallbackYears.length - 1];
+            : availableYears[availableYears.length - 1];
 
         return {
             available_years: availableYears,

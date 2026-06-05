@@ -42,7 +42,7 @@ def _resolve_years(
     if not available_years:
         return None, None, []
 
-    default_years = available_years[-4:] if len(available_years) > 4 else available_years
+    default_years = available_years
     year_from = filters.year_from if filters.year_from in available_years else default_years[0]
     year_to = filters.year_to if filters.year_to in available_years else default_years[-1]
 
@@ -179,11 +179,10 @@ async def fetch_distribution_stats_years(session) -> DistributionStatsYearsRespo
     if not available_years:
         return DistributionStatsYearsResponse()
 
-    default_years = available_years[-4:] if len(available_years) > 4 else available_years
     return DistributionStatsYearsResponse(
         available_years=available_years,
-        default_year_from=default_years[0],
-        default_year_to=default_years[-1],
+        default_year_from=available_years[0],
+        default_year_to=available_years[-1],
     )
 
 

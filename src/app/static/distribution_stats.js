@@ -86,12 +86,26 @@
     let yearsPayload = normalizeYearsPayload(JSON.parse(bootstrapYearsNode.textContent));
     let currentPayload = normalizeTablePayload(JSON.parse(bootstrapTableNode.textContent));
     let currentRange = resolveRange(
-        readStoredRange() || {
+        {
             year_from: currentPayload.selected_year_from,
             year_to: currentPayload.selected_year_to,
         },
         yearsPayload,
     );
+    const storedRange = readStoredRange();
+    if (storedRange) {
+        const resolvedStoredRange = resolveRange(storedRange, yearsPayload);
+        const defaultRange = resolveRange(
+            {
+                year_from: yearsPayload.default_year_from,
+                year_to: yearsPayload.default_year_to,
+            },
+            yearsPayload,
+        );
+        if (resolvedStoredRange.years.length >= defaultRange.years.length) {
+            currentRange = resolvedStoredRange;
+        }
+    }
     let currentFilters = {
         organization_status: currentPayload.organization_status,
         actual_contract_status: currentPayload.actual_contract_status,

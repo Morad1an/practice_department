@@ -83,23 +83,44 @@ class SqlDistributionStatsRepository:
         self,
         session,
     ) -> dict[int, dict[int, int]]:
+        stats_by_organization: dict[int, dict[int, int]] = {}
+        self._merge_statistics_rows(
+            stats_by_organization,
+            await self._fetch_aggregated_order_statistics(session),
+        )
+
         has_precalculated_stats = await session.scalar(
             select(func.count()).select_from(OrganizationDistributionStatistic)
         )
         if has_precalculated_stats:
-            rows = await self._fetch_precalculated_statistics(session)
-        else:
-            rows = await self._fetch_aggregated_order_statistics(session)
+            self._merge_statistics_rows(
+                stats_by_organization,
+                await self._fetch_precalculated_statistics(session),
+                replace=True,
+            )
 
-        stats_by_organization: dict[int, dict[int, int]] = {}
+        return stats_by_organization
+
+    @staticmethod
+    def _merge_statistics_rows(
+        stats_by_organization: dict[int, dict[int, int]],
+        rows,
+        *,
+        replace: bool = False,
+    ) -> None:
         for row in rows:
             organization_id = row["organization_id"]
             year = row["year"]
             stat_number = row["stat_number"] or 0
             if organization_id is None or year is None:
                 continue
-            stats_by_organization.setdefault(int(organization_id), {})[int(year)] = int(stat_number)
-        return stats_by_organization
+            org_id = int(organization_id)
+            year_int = int(year)
+            stats = stats_by_organization.setdefault(org_id, {})
+            if replace:
+                stats[year_int] = int(stat_number)
+            else:
+                stats[year_int] = stats.get(year_int, 0) + int(stat_number)
 
     async def _fetch_precalculated_statistics(self, session):
         statement = (
