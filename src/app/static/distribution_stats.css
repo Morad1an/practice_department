@@ -16,13 +16,23 @@
     background: #fff;
 }
 
-.distribution-table-card,
 .chart-card {
     overflow: hidden;
 }
 
 .distribution-table-scroll {
     overflow-x: auto;
+    overflow-y: visible;
+}
+
+.distribution-data-table th {
+    text-align: center;
+    vertical-align: middle;
+}
+
+.distribution-data-table th .sort-link {
+    justify-content: center;
+    width: 100%;
 }
 
 .distribution-data-table .contract-number-col,

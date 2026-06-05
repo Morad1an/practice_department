@@ -190,6 +190,7 @@
             attachSortHandlers();
             attachLoadMoreHandler();
             attachOrganizationOpenHandlers();
+            window.StickyTableHeaders?.rescan?.(getTableSection() || pageRoot);
             onTableChanged?.();
         };
 

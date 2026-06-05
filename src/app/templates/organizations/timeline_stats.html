@@ -3,7 +3,7 @@
 {% block title %}График-статистика{% endblock %}
 
 {% block extra_head %}
-{% set timeline_stats_assets_version = '20260605-timeline-stats-v3' %}
+{% set timeline_stats_assets_version = '20260605-timeline-stats-v4' %}
 <link rel="stylesheet" href="{{ request.url_for('static', path='active_organizations.css') }}?v={{ timeline_stats_assets_version }}">
 <link rel="stylesheet" href="{{ request.url_for('static', path='distribution_stats.css') }}?v={{ timeline_stats_assets_version }}">
 {% endblock %}

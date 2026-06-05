@@ -624,7 +624,7 @@
 
 .organization-collapsible {
     padding: 0;
-    overflow: hidden;
+    overflow: visible;
 }
 
 .organization-section-toggle {
@@ -664,6 +664,7 @@
 
 .organization-table-wrapper {
     overflow-x: auto;
+    overflow-y: visible;
 }
 
 .organization-data-table {
@@ -673,7 +674,6 @@
     background: #fff;
     border: 1px solid var(--border);
     border-radius: 18px;
-    overflow: hidden;
 }
 
 .organization-data-table th,
@@ -685,11 +685,21 @@
 }
 
 .organization-data-table th {
+    position: static;
+    top: auto;
+    z-index: auto;
+    text-align: center;
+    vertical-align: middle;
     background: rgba(36, 91, 255, 0.08);
+    box-shadow: none;
     color: var(--text-soft);
     text-transform: uppercase;
     letter-spacing: 0.05em;
     font-size: 0.78rem;
+}
+
+.organization-data-table th.sticky-table-cell {
+    box-shadow: 0 1px 0 var(--border);
 }
 
 .organization-data-table tbody tr:last-child td {

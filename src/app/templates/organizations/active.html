@@ -3,12 +3,11 @@
 {% block title %}Действующие организации{% endblock %}
 
 {% block extra_head %}
-{% set active_assets_version = '20260426-filters-v11' %}
+{% set active_assets_version = '20260605-active-v1' %}
 <link rel="stylesheet" href="{{ request.url_for('static', path='active_organizations.css') }}?v={{ active_assets_version }}">
 <style>
     .active-organizations-page {
-        max-width: 1320px;
-        margin: 0 auto;
+        width: 100%;
     }
 
     .active-organizations-page .organization-col {
@@ -232,7 +231,7 @@
                         {% if contract_sort.is_active %}
                             {% set contract_aria = 'ascending' if contract_sort.current_direction != 'desc' else 'descending' %}
                         {% endif %}
-                        <th aria-sort="{{ contract_aria }}">
+                        <th class="contract-number-col" aria-sort="{{ contract_aria }}">
                             <button
                                 type="button"
                                 class="sort-link{% if contract_sort.is_active %} active direction-{{ contract_sort.current_direction }}{% endif %}"
@@ -248,7 +247,7 @@
                         {% if date_sort.is_active %}
                             {% set date_aria = 'ascending' if date_sort.current_direction != 'desc' else 'descending' %}
                         {% endif %}
-                        <th aria-sort="{{ date_aria }}">
+                        <th class="signing-date-col" aria-sort="{{ date_aria }}">
                             <button
                                 type="button"
                                 class="sort-link{% if date_sort.is_active %} active direction-{{ date_sort.current_direction }}{% endif %}"
@@ -291,8 +290,8 @@
                                     </div>
                                 </div>
                             </td>
-                            <td>{{ row.contract_number or '—' }}</td>
-                            <td>{{ row.signing_date or '—' }}</td>
+                            <td class="contract-number-col">{{ row.contract_number or '—' }}</td>
+                            <td class="signing-date-col">{{ row.signing_date or '—' }}</td>
                             <td>
                                 {% if row.study_fields %}
                                     {% set preview_limit = 3 %}

@@ -16,6 +16,7 @@
             --text-soft: #5a6175;
             --border: #e5e8f1;
             --success: #2f9d57;
+            --table-sticky-top: 0px;
         }
 
         * {
@@ -495,17 +496,37 @@
 
         .data-table th,
         .data-table td {
-            text-align: left;
             padding: 16px 18px;
             border-bottom: 1px solid var(--border);
             vertical-align: top;
         }
 
         .data-table th {
+            text-align: center;
+            vertical-align: middle;
+            background: var(--accent-soft);
             font-size: 0.78rem;
             text-transform: uppercase;
             letter-spacing: 0.08em;
             color: var(--text-soft);
+        }
+
+        .data-table td {
+            text-align: left;
+        }
+
+        .data-table th .sort-link {
+            justify-content: center;
+            width: 100%;
+        }
+
+        .data-table .index-cell {
+            text-align: center;
+            vertical-align: middle;
+        }
+
+        .sticky-header-floater {
+            box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12);
         }
 
         .index-header,
@@ -600,6 +621,7 @@
         .sort-link {
             display: inline-flex;
             align-items: center;
+            justify-content: center;
             gap: 6px;
             text-decoration: none;
             color: var(--text-main);
@@ -673,7 +695,8 @@
         }
 
         .table-scroll {
-            overflow-x: visible;
+            overflow-x: auto;
+            overflow-y: visible;
         }
 
         .load-more-wrapper {
@@ -898,6 +921,7 @@
         });
     })();
 </script>
+<script src="{{ request.url_for('static', path='sticky_table_headers.js') }}?v=20260605-sticky-v3"></script>
 {% block extra_scripts %}{% endblock %}
 </body>
 </html>
