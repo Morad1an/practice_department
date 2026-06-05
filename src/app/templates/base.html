@@ -17,6 +17,8 @@
             --border: #e5e8f1;
             --success: #2f9d57;
             --table-sticky-top: 0px;
+            --hero-topbar-height: 108px;
+            --hero-logo-height: 148px;
         }
 
         * {
@@ -41,20 +43,25 @@
             background: linear-gradient(145deg, #1d3c99, #2d73ff);
             color: #fff;
             padding: 32px 48px 40px;
-            box-shadow: 0 15px 30px rgba(24, 51, 140, 0.35);
+            box-shadow: 0 15px 30px rgba(13, 34, 66, 0.35);
+            overflow: visible;
         }
 
         .hero-topbar {
             display: flex;
-            align-items: flex-start;
+            align-items: center;
             justify-content: space-between;
             gap: 24px;
+            height: var(--hero-topbar-height);
+            overflow: visible;
         }
 
         .hero-branding {
-            display: flex;
-            align-items: center;
-            gap: 28px;
+            position: relative;
+            flex: 0 0 auto;
+            width: calc(var(--hero-logo-height) * 2.705);
+            height: var(--hero-topbar-height);
+            overflow: visible;
         }
 
         .hero-actions {
@@ -265,35 +272,17 @@
         }
 
         .hero-logo {
-            width: 124px;
-            height: 124px;
-            border-radius: 26px;
-            padding: 12px;
-            background: rgba(255, 255, 255, 0.9);
-            box-shadow: 0 12px 30px rgba(7, 20, 67, 0.35);
-            object-fit: contain;
-            object-position: center;
+            position: absolute;
+            left: 0;
+            top: 50%;
             display: block;
-        }
-
-        .hero-text {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-
-        .department-label {
-            margin: 0;
-            text-transform: uppercase;
-            font-size: 0.9rem;
-            letter-spacing: 0.18rem;
-            opacity: 0.85;
-        }
-
-        .hero-title {
-            margin: 10px 0 0;
-            font-size: 2rem;
-            font-weight: 600;
+            height: var(--hero-logo-height);
+            width: auto;
+            max-width: none;
+            transform: translateY(-50%);
+            object-fit: contain;
+            object-position: left center;
+            pointer-events: none;
         }
 
         nav.tabs {
@@ -762,14 +751,10 @@
                 padding-right: 20px;
             }
 
-            .hero-branding {
-                flex-direction: column;
-                align-items: flex-start;
-                gap: 18px;
-            }
-
             .hero-topbar {
                 flex-direction: column;
+                align-items: flex-start;
+                height: auto;
             }
 
             .hero-actions {
@@ -789,10 +774,19 @@
                 width: 100%;
             }
 
+            .hero-branding {
+                position: static;
+                width: auto;
+                height: auto;
+            }
+
             .hero-logo {
-                width: 90px;
-                height: 90px;
-                padding: 8px;
+                position: static;
+                transform: none;
+                height: 56px;
+                width: auto;
+                max-width: 100%;
+                pointer-events: auto;
             }
 
             .card {
@@ -815,11 +809,7 @@
     <header class="hero">
         <div class="hero-topbar">
             <div class="hero-branding">
-                <img src="{{ request.url_for('static', path='logo_voenmeh.png') }}" alt="Логотип Военмеха" class="hero-logo">
-                <div class="hero-text">
-                    <p class="department-label">Отдел практик и стажировок Военмеха</p>
-                    <p class="hero-title">Цифровая панель практик</p>
-                </div>
+                <img src="{{ request.url_for('static', path='voenmeh_logo_white.png') }}" alt="Военмех" class="hero-logo">
             </div>
             <div class="hero-actions">
                 <div class="hero-utility-panel">
