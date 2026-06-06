@@ -3,7 +3,8 @@
 {% block title %}{{ page_title }}{% endblock %}
 
 {% block extra_head %}
-{% set organization_detail_assets_version = '20260605-6' %}
+{% set organization_detail_assets_version = '20260606-organization-detail-v8' %}
+<link rel="stylesheet" href="{{ request.url_for('static', path='active_organizations.css') }}?v={{ organization_detail_assets_version }}">
 <link rel="stylesheet" href="{{ request.url_for('static', path='organization_detail.css') }}?v={{ organization_detail_assets_version }}">
 {% endblock %}
 
@@ -131,19 +132,27 @@
                                 {% endfor %}
                             </div>
                             <div class="organization-study-add-row">
-                                <input
-                                    type="text"
-                                    class="organization-study-search"
-                                    data-study-field-search
-                                    list="organization-study-field-options"
-                                    placeholder="Начните вводить направление"
-                                    autocomplete="off"
-                                >
-                                <datalist id="organization-study-field-options">
-                                    {% for option in study_field_options or [] %}
-                                        <option value="{{ option.label }}"></option>
-                                    {% endfor %}
-                                </datalist>
+                                <div class="organization-study-add-field">
+                                    <input
+                                        type="text"
+                                        class="organization-study-search"
+                                        data-study-field-search
+                                        placeholder="Начните вводить направление"
+                                        autocomplete="off"
+                                        role="combobox"
+                                        aria-expanded="false"
+                                        aria-controls="organization-study-field-suggestions"
+                                        aria-autocomplete="list"
+                                    >
+                                    <div
+                                        id="organization-study-field-suggestions"
+                                        class="organization-study-suggestions"
+                                        data-study-field-suggestions
+                                        hidden
+                                    >
+                                        <div class="organization-study-suggestions-list" data-study-field-suggestions-list></div>
+                                    </div>
+                                </div>
                                 <button type="button" class="btn btn-outline" data-add-study-field>Добавить</button>
                             </div>
                             <div class="organization-placeholder" data-empty-study-fields-note {% if organization.study_fields %}hidden{% endif %}>
@@ -616,9 +625,17 @@
                     {% endif %}
                 </div>
                 <div class="organization-requisite-add-row">
-                    <select data-requisite-type-select>
-                        <option value="">Выберите реквизит</option>
-                    </select>
+                    <div class="filter-dropdown organization-requisite-type-dropdown" data-select-dropdown>
+                        <button type="button" class="btn filter-trigger" data-select-trigger aria-haspopup="listbox" aria-expanded="false">
+                            <span class="filter-trigger-text" data-select-trigger-text>Выберите реквизит</span>
+                        </button>
+                        <div class="filter-menu organization-requisite-type-menu" data-select-menu hidden role="listbox">
+                            <div class="filter-options" data-select-options></div>
+                        </div>
+                        <select class="select-dropdown-native" hidden data-requisite-type-select>
+                            <option value="">Выберите реквизит</option>
+                        </select>
+                    </div>
                     <button type="button" class="btn btn-outline" data-add-requisite>Добавить реквизит</button>
                 </div>
             </div>
@@ -656,5 +673,6 @@
 {% endblock %}
 
 {% block extra_scripts %}
+<script src="{{ request.url_for('static', path='distribution_stats_shared.js') }}?v={{ organization_detail_assets_version }}"></script>
 <script src="{{ request.url_for('static', path='organization_detail.js') }}?v={{ organization_detail_assets_version }}"></script>
 {% endblock %}

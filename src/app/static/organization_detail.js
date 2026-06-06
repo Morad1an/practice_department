@@ -70,12 +70,15 @@
     })();
     const studyFieldList = form.querySelector("[data-study-field-list]");
     const studyFieldSearch = form.querySelector("[data-study-field-search]");
-    const studyFieldOptionsList = form.querySelector("#organization-study-field-options");
+    const studyFieldSuggestionsPanel = form.querySelector("[data-study-field-suggestions]");
+    const studyFieldSuggestionsList = form.querySelector("[data-study-field-suggestions-list]");
     const addStudyFieldButton = form.querySelector("[data-add-study-field]");
     const emptyStudyFieldsNote = form.querySelector("[data-empty-study-fields-note]");
     const requisitesList = form.querySelector("[data-requisites-list]");
     const requisiteTypeSelect = form.querySelector("[data-requisite-type-select]");
+    const requisiteTypeDropdown = requisiteTypeSelect?.closest("[data-select-dropdown]") || null;
     const addRequisiteButton = form.querySelector("[data-add-requisite]");
+    const selectDropdownNamespace = window.DistributionStatsPage || {};
 
     const escapeHtml = (value) =>
         String(value ?? "")
@@ -426,22 +429,80 @@
         emptyStudyFieldsNote.hidden = studyFieldList.querySelectorAll("[data-study-field-chip]").length > 0;
     };
 
-    const syncStudyFieldOptionsList = () => {
-        if (!(studyFieldOptionsList instanceof HTMLDataListElement)) {
-            return;
-        }
+    const getAvailableStudyFieldOptions = () => {
         const selectedIds = getSelectedStudyFieldIds();
-        studyFieldOptionsList.innerHTML = "";
-        studyFieldOptions.forEach((option) => {
+        return studyFieldOptions.filter((option) => {
             const optionId = parseInteger(option?.id);
             const label = String(option?.label || "").trim();
-            if (optionId === null || selectedIds.has(optionId) || !label) {
-                return;
-            }
-            const node = document.createElement("option");
-            node.value = label;
-            studyFieldOptionsList.appendChild(node);
+            return optionId !== null && !selectedIds.has(optionId) && label;
         });
+    };
+
+    const filterAvailableStudyFieldOptions = (query) => {
+        const normalizedQuery = normalizeOptionLabel(query);
+        const available = getAvailableStudyFieldOptions();
+        if (!normalizedQuery) {
+            return available.slice(0, 20);
+        }
+        return available
+            .filter((option) => normalizeOptionLabel(option?.label).includes(normalizedQuery))
+            .slice(0, 20);
+    };
+
+    const closeStudyFieldSuggestions = () => {
+        if (!(studyFieldSuggestionsPanel instanceof HTMLElement)) {
+            return;
+        }
+        studyFieldSuggestionsPanel.hidden = true;
+        if (studyFieldSearch instanceof HTMLInputElement) {
+            studyFieldSearch.setAttribute("aria-expanded", "false");
+        }
+    };
+
+    const renderStudyFieldSuggestions = (query = "") => {
+        if (
+            !(studyFieldSuggestionsPanel instanceof HTMLElement)
+            || !(studyFieldSuggestionsList instanceof HTMLElement)
+        ) {
+            return;
+        }
+        const options = filterAvailableStudyFieldOptions(query);
+        studyFieldSuggestionsList.innerHTML = "";
+        if (!options.length) {
+            closeStudyFieldSuggestions();
+            return;
+        }
+        options.forEach((option) => {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = "organization-study-suggestion";
+            button.textContent = option.label || "";
+            button.addEventListener("mousedown", (event) => {
+                event.preventDefault();
+            });
+            button.addEventListener("click", () => {
+                if (studyFieldSearch instanceof HTMLInputElement) {
+                    studyFieldSearch.value = option.label || "";
+                    studyFieldSearch.setCustomValidity("");
+                }
+                closeStudyFieldSuggestions();
+            });
+            studyFieldSuggestionsList.appendChild(button);
+        });
+        studyFieldSuggestionsPanel.hidden = false;
+        if (studyFieldSearch instanceof HTMLInputElement) {
+            studyFieldSearch.setAttribute("aria-expanded", "true");
+        }
+    };
+
+    const syncStudyFieldOptionsList = () => {
+        if (
+            studyFieldSuggestionsPanel instanceof HTMLElement
+            && !studyFieldSuggestionsPanel.hidden
+            && studyFieldSearch instanceof HTMLInputElement
+        ) {
+            renderStudyFieldSuggestions(studyFieldSearch.value);
+        }
     };
 
     const buildStudyFieldChip = (option) => {
@@ -474,6 +535,7 @@
         }
         studyFieldList.appendChild(buildStudyFieldChip(option));
         studyFieldSearch.value = "";
+        closeStudyFieldSuggestions();
         syncStudyFieldsEmptyState();
         syncStudyFieldOptionsList();
     };
@@ -491,6 +553,13 @@
                 .filter((item) => item.id !== null && !isOtherRequisiteLabel(item.label))
                 .map((item) => item.id),
         );
+    };
+
+    const refreshRequisiteTypeDropdown = () => {
+        if (typeof selectDropdownNamespace.refreshSelectDropdowns !== "function") {
+            return;
+        }
+        selectDropdownNamespace.refreshSelectDropdowns(requisiteTypeDropdown || form);
     };
 
     const syncRequisiteTypeSelectOptions = () => {
@@ -515,6 +584,7 @@
             node.selected = currentValue === node.value;
             requisiteTypeSelect.appendChild(node);
         });
+        refreshRequisiteTypeDropdown();
     };
 
     const buildRequisiteItem = ({
@@ -1196,9 +1266,35 @@
     });
 
     studyFieldSearch?.addEventListener("input", () => {
-        if (studyFieldSearch instanceof HTMLInputElement) {
-            studyFieldSearch.setCustomValidity("");
+        if (!(studyFieldSearch instanceof HTMLInputElement)) {
+            return;
         }
+        studyFieldSearch.setCustomValidity("");
+        renderStudyFieldSuggestions(studyFieldSearch.value);
+    });
+
+    studyFieldSearch?.addEventListener("focus", () => {
+        if (studyFieldSearch instanceof HTMLInputElement) {
+            renderStudyFieldSuggestions(studyFieldSearch.value);
+        }
+    });
+
+    studyFieldSearch?.addEventListener("blur", () => {
+        window.setTimeout(closeStudyFieldSuggestions, 150);
+    });
+
+    document.addEventListener("click", (event) => {
+        const target = event.target;
+        if (!(target instanceof Element)) {
+            return;
+        }
+        if (
+            target.closest("[data-study-field-search]")
+            || target.closest("[data-study-field-suggestions]")
+        ) {
+            return;
+        }
+        closeStudyFieldSuggestions();
     });
 
     studyFieldList?.addEventListener("click", async (event) => {
@@ -1222,6 +1318,9 @@
         removeButton.closest("[data-study-field-chip]")?.remove();
         syncStudyFieldsEmptyState();
         syncStudyFieldOptionsList();
+        if (studyFieldSearch instanceof HTMLInputElement && document.activeElement === studyFieldSearch) {
+            renderStudyFieldSuggestions(studyFieldSearch.value);
+        }
     });
 
     addRequisiteButton?.addEventListener("click", () => {
@@ -1282,6 +1381,9 @@
         labelNode.textContent = customLabel ? `${baseLabel} (${customLabel})` : baseLabel;
     });
 
+    if (typeof selectDropdownNamespace.initSelectDropdowns === "function") {
+        selectDropdownNamespace.initSelectDropdowns(form);
+    }
     syncStudyFieldsEmptyState();
     syncStudyFieldOptionsList();
     syncRequisiteTypeSelectOptions();
