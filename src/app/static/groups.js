@@ -53,7 +53,7 @@
     const tableSelector = "[data-table-root]";
     let tableSection = pageRoot.querySelector(tableSelector);
     let tableScroll = tableSection?.querySelector(".table-scroll") || null;
-    let isSyncingHorizontalScroll = false;
+    let userIsScrollingFloating = false;
 
     const semesterOptions = Array.isArray(bootstrapState?.semester_options)
         ? bootstrapState.semester_options
@@ -213,6 +213,26 @@
         }
     };
 
+    const syncFloatingScrollFromTable = () => {
+        if (!floatingScrollbar || !tableScroll) {
+            return;
+        }
+        const tableMaxScrollLeft = Math.max(
+            tableScroll.scrollWidth - tableScroll.clientWidth,
+            0,
+        );
+        const floatingMaxScrollLeft = Math.max(
+            floatingScrollbar.scrollWidth - floatingScrollbar.clientWidth,
+            0,
+        );
+        const nextFloatingScrollLeft = tableMaxScrollLeft <= 0 || floatingMaxScrollLeft <= 0
+            ? tableScroll.scrollLeft
+            : (tableScroll.scrollLeft / tableMaxScrollLeft) * floatingMaxScrollLeft;
+        if (Math.abs(floatingScrollbar.scrollLeft - nextFloatingScrollLeft) > 1) {
+            floatingScrollbar.scrollLeft = nextFloatingScrollLeft;
+        }
+    };
+
     const syncFloatingScrollbarVisibility = () => {
         if (!floatingScrollbar || !floatingScrollbarInner) {
             return;
@@ -233,35 +253,18 @@
             floatingScrollbar.scrollLeft = 0;
             return;
         }
-        if (Math.abs(floatingScrollbar.scrollLeft - tableScroll.scrollLeft) > 1) {
-            floatingScrollbar.scrollLeft = tableScroll.scrollLeft;
-        }
+        syncFloatingScrollFromTable();
     };
 
     const handleTableHorizontalScroll = () => {
-        if (!floatingScrollbar || !tableScroll || isSyncingHorizontalScroll) {
+        if (!floatingScrollbar || !tableScroll) {
             return;
         }
-        const tableMaxScrollLeft = Math.max(
-            tableScroll.scrollWidth - tableScroll.clientWidth,
-            0,
-        );
-        const floatingMaxScrollLeft = Math.max(
-            floatingScrollbar.scrollWidth - floatingScrollbar.clientWidth,
-            0,
-        );
-        isSyncingHorizontalScroll = true;
-        if (tableMaxScrollLeft <= 0 || floatingMaxScrollLeft <= 0) {
-            floatingScrollbar.scrollLeft = tableScroll.scrollLeft;
-        } else {
-            const progress = tableScroll.scrollLeft / tableMaxScrollLeft;
-            floatingScrollbar.scrollLeft = progress * floatingMaxScrollLeft;
-        }
-        isSyncingHorizontalScroll = false;
+        syncFloatingScrollFromTable();
     };
 
     const handleFloatingHorizontalScroll = () => {
-        if (!floatingScrollbar || !tableScroll || isSyncingHorizontalScroll) {
+        if (!floatingScrollbar || !tableScroll || !userIsScrollingFloating) {
             return;
         }
         const floatingMaxScrollLeft = Math.max(
@@ -272,14 +275,12 @@
             tableScroll.scrollWidth - tableScroll.clientWidth,
             0,
         );
-        isSyncingHorizontalScroll = true;
         if (floatingMaxScrollLeft <= 0 || tableMaxScrollLeft <= 0) {
             tableScroll.scrollLeft = floatingScrollbar.scrollLeft;
-        } else {
-            const progress = floatingScrollbar.scrollLeft / floatingMaxScrollLeft;
-            tableScroll.scrollLeft = progress * tableMaxScrollLeft;
+            return;
         }
-        isSyncingHorizontalScroll = false;
+        const progress = floatingScrollbar.scrollLeft / floatingMaxScrollLeft;
+        tableScroll.scrollLeft = progress * tableMaxScrollLeft;
     };
 
     const bindHorizontalScrollbar = () => {
@@ -363,6 +364,18 @@
         exportController.exportTable();
     });
 
+    floatingScrollbar?.addEventListener("pointerdown", () => {
+        userIsScrollingFloating = true;
+    });
+    floatingScrollbar?.addEventListener("pointerup", () => {
+        userIsScrollingFloating = false;
+    });
+    floatingScrollbar?.addEventListener("pointercancel", () => {
+        userIsScrollingFloating = false;
+    });
+    window.addEventListener("pointerup", () => {
+        userIsScrollingFloating = false;
+    });
     floatingScrollbar?.addEventListener("scroll", handleFloatingHorizontalScroll, {passive: true});
 
     window.addEventListener("popstate", (event) => {

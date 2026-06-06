@@ -146,6 +146,156 @@
         return mapping;
     };
 
+    const closeSelectDropdown = (dropdown) => {
+        const menu = dropdown.querySelector("[data-select-menu]");
+        const trigger = dropdown.querySelector("[data-select-trigger]");
+        if (menu) {
+            menu.hidden = true;
+        }
+        trigger?.classList.remove("is-open");
+        trigger?.setAttribute("aria-expanded", "false");
+    };
+
+    const closeSelectDropdownMenus = (root, exceptDropdown = null) => {
+        const scope = root instanceof Element ? root : document;
+        scope.querySelectorAll("[data-select-dropdown]").forEach((dropdown) => {
+            if (dropdown === exceptDropdown) {
+                return;
+            }
+            closeSelectDropdown(dropdown);
+        });
+    };
+
+    const openSelectDropdown = (dropdown) => {
+        const scope = dropdown.closest("[data-page-root]") || document;
+        closeSelectDropdownMenus(scope, dropdown);
+        const menu = dropdown.querySelector("[data-select-menu]");
+        const trigger = dropdown.querySelector("[data-select-trigger]");
+        if (menu) {
+            menu.hidden = false;
+        }
+        trigger?.classList.add("is-open");
+        trigger?.setAttribute("aria-expanded", "true");
+    };
+
+    const refreshSelectDropdown = (dropdown) => {
+        const select = dropdown.querySelector("select");
+        const trigger = dropdown.querySelector("[data-select-trigger]");
+        const triggerText = dropdown.querySelector("[data-select-trigger-text]");
+        const optionsContainer = dropdown.querySelector("[data-select-options]");
+        if (
+            !(select instanceof HTMLSelectElement)
+            || !(trigger instanceof HTMLButtonElement)
+            || !(triggerText instanceof HTMLElement)
+            || !(optionsContainer instanceof HTMLElement)
+        ) {
+            return;
+        }
+
+        const selectedOption = select.selectedOptions[0];
+        triggerText.textContent = selectedOption?.textContent?.trim() || "—";
+        trigger.classList.toggle("has-value", Boolean(select.value));
+        trigger.toggleAttribute("disabled", select.disabled);
+
+        optionsContainer.innerHTML = "";
+        if (!select.options.length) {
+            optionsContainer.innerHTML = '<div class="filter-empty">Нет доступных значений</div>';
+            return;
+        }
+
+        Array.from(select.options).forEach((option) => {
+            const optionButton = document.createElement("button");
+            optionButton.type = "button";
+            optionButton.className = `filter-option filter-option-static select-dropdown-option${
+                option.selected ? " is-selected" : ""
+            }`;
+            optionButton.dataset.value = option.value;
+            optionButton.innerHTML = `
+                <span class="filter-option-text">
+                    <span class="filter-option-title">${escapeHtml(option.textContent || "")}</span>
+                </span>
+            `;
+            optionButton.addEventListener("click", (event) => {
+                event.stopPropagation();
+                select.value = option.value;
+                select.dispatchEvent(new Event("change", {bubbles: true}));
+                refreshSelectDropdown(dropdown);
+                closeSelectDropdown(dropdown);
+            });
+            optionsContainer.appendChild(optionButton);
+        });
+    };
+
+    const initSelectDropdowns = (root = document) => {
+        const scope = root instanceof Element ? root : document;
+        scope.querySelectorAll("[data-select-dropdown]").forEach((dropdown) => {
+            if (dropdown.dataset.selectDropdownReady === "true") {
+                refreshSelectDropdown(dropdown);
+                return;
+            }
+
+            const select = dropdown.querySelector("select");
+            const trigger = dropdown.querySelector("[data-select-trigger]");
+            const menu = dropdown.querySelector("[data-select-menu]");
+            if (
+                !(select instanceof HTMLSelectElement)
+                || !(trigger instanceof HTMLButtonElement)
+                || !(menu instanceof HTMLElement)
+            ) {
+                return;
+            }
+
+            trigger.addEventListener("click", (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                if (trigger.hasAttribute("disabled")) {
+                    return;
+                }
+                const isOpen = trigger.getAttribute("aria-expanded") === "true";
+                if (isOpen) {
+                    closeSelectDropdown(dropdown);
+                } else {
+                    openSelectDropdown(dropdown);
+                }
+            });
+
+            select.addEventListener("change", () => {
+                refreshSelectDropdown(dropdown);
+            });
+
+            dropdown.dataset.selectDropdownReady = "true";
+            refreshSelectDropdown(dropdown);
+        });
+
+        if (!document.documentElement.dataset.selectDropdownOutsideBound) {
+            document.addEventListener("click", (event) => {
+                const target = event.target;
+                if (!(target instanceof Element)) {
+                    return;
+                }
+                const dropdown = target.closest("[data-select-dropdown]");
+                if (!dropdown) {
+                    closeSelectDropdownMenus(document);
+                }
+            });
+
+            document.addEventListener("keydown", (event) => {
+                if (event.key === "Escape") {
+                    closeSelectDropdownMenus(document);
+                }
+            });
+
+            document.documentElement.dataset.selectDropdownOutsideBound = "true";
+        }
+    };
+
+    const refreshSelectDropdowns = (root = document) => {
+        const scope = root instanceof Element ? root : document;
+        scope.querySelectorAll("[data-select-dropdown]").forEach((dropdown) => {
+            refreshSelectDropdown(dropdown);
+        });
+    };
+
     namespace.storageKey = storageKey;
     namespace.normalizeYear = normalizeYear;
     namespace.normalizeYearsPayload = normalizeYearsPayload;
@@ -157,4 +307,20 @@
     namespace.fetchJson = fetchJson;
     namespace.escapeHtml = escapeHtml;
     namespace.buildYearPalette = buildYearPalette;
+    namespace.initSelectDropdowns = initSelectDropdowns;
+    namespace.refreshSelectDropdowns = refreshSelectDropdowns;
+
+    const bootSelectDropdowns = () => {
+        document.querySelectorAll("[data-page-root]").forEach((pageRoot) => {
+            if (pageRoot.querySelector("[data-select-dropdown]")) {
+                initSelectDropdowns(pageRoot);
+            }
+        });
+    };
+
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", bootSelectDropdowns);
+    } else {
+        bootSelectDropdowns();
+    }
 })();

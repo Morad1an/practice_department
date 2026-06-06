@@ -39,8 +39,9 @@
 }
 
 .filter-trigger.has-value {
-    border-color: rgba(36, 91, 255, 0.35);
-    background: rgba(36, 91, 255, 0.05);
+    border-color: var(--border);
+    background: #fff;
+    color: var(--text-main);
 }
 
 .filter-trigger.is-open::after {

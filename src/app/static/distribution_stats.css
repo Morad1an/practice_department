@@ -3,17 +3,57 @@
     max-width: 920px;
 }
 
-.distribution-toolbar {
-    grid-template-columns: repeat(auto-fit, minmax(220px, 280px));
+.select-dropdown-native {
+    display: none;
 }
 
-.distribution-toolbar-chart {
-    grid-template-columns: repeat(auto-fit, minmax(220px, 260px));
+.distribution-stats-page .filters-shell,
+.timeline-stats-page .filters-shell {
+    overflow: visible;
 }
 
-.year-filter select {
+.distribution-stats-page .filter-dropdown .btn.filter-trigger,
+.timeline-stats-page .filter-dropdown .btn.filter-trigger {
+    width: 100%;
     min-height: 52px;
+    padding: 0 16px;
+    border: 1px solid var(--border);
+    border-radius: 14px;
     background: #fff;
+    color: var(--text-main);
+    box-shadow: none;
+    justify-content: space-between;
+    gap: 8px;
+    transform: none;
+}
+
+.distribution-stats-page .filter-dropdown .btn.filter-trigger:hover,
+.timeline-stats-page .filter-dropdown .btn.filter-trigger:hover,
+.distribution-stats-page .filter-dropdown .btn.filter-trigger:focus-visible,
+.timeline-stats-page .filter-dropdown .btn.filter-trigger:focus-visible {
+    transform: none;
+    border-color: var(--accent);
+    color: var(--text-main);
+    background: #fff;
+}
+
+.select-dropdown-option {
+    width: 100%;
+    border: none;
+    background: none;
+    font: inherit;
+    text-align: left;
+}
+
+.select-dropdown-option.is-selected {
+    background: #fff;
+    border: 1px solid var(--accent);
+    color: var(--accent);
+}
+
+.select-dropdown-option.is-selected .filter-option-title {
+    color: var(--accent);
+    font-weight: 600;
 }
 
 .chart-card {

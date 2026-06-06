@@ -19,6 +19,8 @@
         || typeof namespace.writeStoredRange !== "function"
         || typeof namespace.readStoredRange !== "function"
         || typeof namespace.buildPeriodLabel !== "function"
+        || typeof namespace.initSelectDropdowns !== "function"
+        || typeof namespace.refreshSelectDropdowns !== "function"
         || typeof logosNamespace.createLogosController !== "function"
     ) {
         return;
@@ -129,6 +131,9 @@
         resetButton?.toggleAttribute("disabled", busy);
         organizationStatusSelect?.toggleAttribute("disabled", busy);
         actualContractStatusSelect?.toggleAttribute("disabled", busy);
+        if (!busy) {
+            namespace.refreshSelectDropdowns(pageRoot);
+        }
     };
 
     const syncRangeControls = () => {
@@ -146,6 +151,7 @@
         if (summaryText) {
             summaryText.textContent = "";
         }
+        namespace.refreshSelectDropdowns(pageRoot);
     };
 
     const isColumnSortable = (column) => (
@@ -397,6 +403,7 @@
         window.scrollTo({top: 0, behavior: "smooth"});
     });
 
+    namespace.initSelectDropdowns(pageRoot);
     syncRangeControls();
     renderTable(currentPayload);
     handleScrollButton();

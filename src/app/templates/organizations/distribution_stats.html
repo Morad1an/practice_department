@@ -3,7 +3,7 @@
 {% block title %}Статистика распределения{% endblock %}
 
 {% block extra_head %}
-{% set distribution_stats_assets_version = '20260605-distribution-stats-v6' %}
+{% set distribution_stats_assets_version = '20260606-distribution-stats-v10' %}
 <link rel="stylesheet" href="{{ request.url_for('static', path='active_organizations.css') }}?v={{ distribution_stats_assets_version }}">
 <link rel="stylesheet" href="{{ request.url_for('static', path='distribution_stats.css') }}?v={{ distribution_stats_assets_version }}">
 {% endblock %}
@@ -25,26 +25,50 @@
         </div>
 
         <div class="filters filters-shell">
-            <div class="filters-toolbar distribution-toolbar">
-                <div class="filter-dropdown year-filter">
-                    <label for="distribution-year-from">Год с</label>
-                    <select id="distribution-year-from" data-year-from-select></select>
+            <div class="filters-toolbar">
+                <div class="filter-dropdown" data-select-dropdown>
+                    <label>Год с</label>
+                    <button type="button" class="btn filter-trigger" data-select-trigger aria-haspopup="listbox" aria-expanded="false">
+                        <span class="filter-trigger-text" data-select-trigger-text>—</span>
+                    </button>
+                    <div class="filter-menu" data-select-menu hidden role="listbox">
+                        <div class="filter-options" data-select-options></div>
+                    </div>
+                    <select id="distribution-year-from" class="select-dropdown-native" hidden data-year-from-select></select>
                 </div>
-                <div class="filter-dropdown year-filter">
-                    <label for="distribution-year-to">Год по</label>
-                    <select id="distribution-year-to" data-year-to-select></select>
+                <div class="filter-dropdown" data-select-dropdown>
+                    <label>Год по</label>
+                    <button type="button" class="btn filter-trigger" data-select-trigger aria-haspopup="listbox" aria-expanded="false">
+                        <span class="filter-trigger-text" data-select-trigger-text>—</span>
+                    </button>
+                    <div class="filter-menu" data-select-menu hidden role="listbox">
+                        <div class="filter-options" data-select-options></div>
+                    </div>
+                    <select id="distribution-year-to" class="select-dropdown-native" hidden data-year-to-select></select>
                 </div>
-                <div class="filter-dropdown year-filter">
-                    <label for="distribution-organization-status">Статус организации</label>
-                    <select id="distribution-organization-status" data-organization-status-select>
+                <div class="filter-dropdown" data-select-dropdown>
+                    <label>Статус организации</label>
+                    <button type="button" class="btn filter-trigger" data-select-trigger aria-haspopup="listbox" aria-expanded="false">
+                        <span class="filter-trigger-text" data-select-trigger-text>Все</span>
+                    </button>
+                    <div class="filter-menu" data-select-menu hidden role="listbox">
+                        <div class="filter-options" data-select-options></div>
+                    </div>
+                    <select id="distribution-organization-status" class="select-dropdown-native" hidden data-organization-status-select>
                         <option value="all">Все</option>
                         <option value="active">Только действующие</option>
                         <option value="inactive">Только недействующие</option>
                     </select>
                 </div>
-                <div class="filter-dropdown year-filter">
-                    <label for="distribution-contract-status">Актуальный договор практики</label>
-                    <select id="distribution-contract-status" data-actual-contract-status-select>
+                <div class="filter-dropdown" data-select-dropdown>
+                    <label>Актуальный договор практики</label>
+                    <button type="button" class="btn filter-trigger" data-select-trigger aria-haspopup="listbox" aria-expanded="false">
+                        <span class="filter-trigger-text" data-select-trigger-text>Все</span>
+                    </button>
+                    <div class="filter-menu" data-select-menu hidden role="listbox">
+                        <div class="filter-options" data-select-options></div>
+                    </div>
+                    <select id="distribution-contract-status" class="select-dropdown-native" hidden data-actual-contract-status-select>
                         <option value="all">Все</option>
                         <option value="with_actual_contract">Есть</option>
                         <option value="without_actual_contract">Нет</option>

@@ -19,6 +19,8 @@
         || typeof namespace.readStoredRange !== "function"
         || typeof namespace.buildPeriodLabel !== "function"
         || typeof namespace.buildYearPalette !== "function"
+        || typeof namespace.initSelectDropdowns !== "function"
+        || typeof namespace.refreshSelectDropdowns !== "function"
     ) {
         return;
     }
@@ -158,6 +160,9 @@
         organizationStatusSelect?.toggleAttribute("disabled", busy);
         actualContractStatusSelect?.toggleAttribute("disabled", busy);
         syncWindowControls();
+        if (!busy) {
+            namespace.refreshSelectDropdowns(pageRoot);
+        }
     };
 
     const syncControls = () => {
@@ -178,6 +183,7 @@
         if (summaryText) {
             summaryText.textContent = "";
         }
+        namespace.refreshSelectDropdowns(pageRoot);
     };
 
     const renderError = () => {
@@ -340,6 +346,14 @@
         }
     };
 
+    const readPageSizeFromControls = () => {
+        const nextSize = Number(pageSizeSelect?.value);
+        if (!Number.isInteger(nextSize) || nextSize <= 0) {
+            return pageSize;
+        }
+        return nextSize;
+    };
+
     applyButton?.addEventListener("click", () => {
         currentRange = resolveRange({
             year_from: yearFromSelect?.value,
@@ -349,6 +363,9 @@
             organization_status: normalizeOrganizationStatus(organizationStatusSelect?.value),
             actual_contract_status: normalizeActualContractStatus(actualContractStatusSelect?.value),
         };
+        pageSize = readPageSizeFromControls();
+        pageOffset = 0;
+        writePageSize(pageSize);
         loadChart();
     });
 
@@ -361,6 +378,9 @@
             organization_status: "all",
             actual_contract_status: "all",
         };
+        pageSize = 10;
+        pageOffset = 0;
+        writePageSize(pageSize);
         loadChart();
     });
 
@@ -377,21 +397,11 @@
         renderChart(currentPayload);
     });
 
-    pageSizeSelect?.addEventListener("change", () => {
-        const nextSize = Number(pageSizeSelect.value);
-        if (!Number.isInteger(nextSize) || nextSize <= 0) {
-            return;
-        }
-        pageSize = nextSize;
-        pageOffset = 0;
-        writePageSize(pageSize);
-        renderChart(currentPayload);
-    });
-
     scrollTopButton?.addEventListener("click", () => {
         window.scrollTo({top: 0, behavior: "smooth"});
     });
 
+    namespace.initSelectDropdowns(pageRoot);
     syncControls();
     renderChart(currentPayload);
     handleScrollButton();
