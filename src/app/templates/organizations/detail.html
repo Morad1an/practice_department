@@ -3,7 +3,7 @@
 {% block title %}{{ page_title }}{% endblock %}
 
 {% block extra_head %}
-{% set organization_detail_assets_version = '20260606-organization-detail-v8' %}
+{% set organization_detail_assets_version = '20260710-org-autofill-v1' %}
 <link rel="stylesheet" href="{{ request.url_for('static', path='active_organizations.css') }}?v={{ organization_detail_assets_version }}">
 <link rel="stylesheet" href="{{ request.url_for('static', path='organization_detail.css') }}?v={{ organization_detail_assets_version }}">
 {% endblock %}
@@ -34,11 +34,14 @@
         data-create-mode="{{ 'true' if create_mode else 'false' }}"
         data-can-edit="{{ 'true' if can_edit else 'false' }}"
         data-save-url="{% if create_mode %}{{ request.url_for('create_organization_api') }}{% else %}{{ request.url_for('update_organization_api', organization_id=organization.id) }}{% endif %}"
+        data-dadata-lookup-url="{{ request.url_for('dadata_party_lookup_api') }}"
+        data-dadata-job-url-template="{{ request.url_for('dadata_job_status_api', job_id='__JOB_ID__') }}"
         data-contact-type-options='{{ contact_type_options | tojson | forceescape }}'
         {% if organization.map_query %}data-map-query="{{ organization.map_query }}"{% endif %}
         {% if not create_mode %}
             data-organization-id="{{ organization.id }}"
             data-delete-url="{{ request.url_for('delete_organization_api', organization_id=organization.id) }}"
+            data-dadata-refresh-url="{{ request.url_for('dadata_organization_refresh_api', organization_id=organization.id) }}"
             data-add-document-url="{{ request.url_for('add_organization_document_api', organization_id=organization.id) }}"
             data-upload-logo-url="{{ request.url_for('upload_organization_logo_api', organization_id=organization.id) }}"
             data-delete-logo-url="{{ request.url_for('delete_organization_logo_api', organization_id=organization.id) }}"
@@ -49,6 +52,11 @@
         <script type="application/json" data-requisite-type-options-json>{{ requisite_type_options | tojson }}</script>
         <div class="organization-form-status" data-form-status hidden></div>
         <div class="organization-toast" data-organization-toast hidden></div>
+        {% if not create_mode and can_edit %}
+            <div class="organization-form-actions organization-sync-action">
+                <button type="button" class="btn btn-outline" data-dadata-refresh>Синхронизация данных с ЕГРЮЛ</button>
+            </div>
+        {% endif %}
 
         <div class="organization-card-layout">
             <div class="organization-main-column">
@@ -637,22 +645,35 @@
                         </select>
                     </div>
                     <button type="button" class="btn btn-outline" data-add-requisite>Добавить реквизит</button>
+                    {% if create_mode and can_edit %}
+                        <button type="button" class="btn btn-outline" data-dadata-lookup>
+                            Заполнить по ЕГРЮЛ
+                        </button>
+                    {% endif %}
                 </div>
             </div>
         </section>
 
-        {% if can_edit %}
+        {% if not create_mode %}
             <div class="organization-form-actions">
-                {% if not create_mode %}
-                    <button type="button" class="btn organization-danger-button" data-delete-organization>Удалить организацию</button>
-                {% else %}
-                    <span class="muted">После создания организации здесь появится действие удаления.</span>
+                <div class="organization-form-actions-left">
+                    {% if can_edit %}
+                        <button type="button" class="btn organization-danger-button" data-delete-organization>Удалить организацию</button>
+                    {% endif %}
+                </div>
+                {% if can_edit %}
+                    <div class="organization-form-actions-right">
+                        <button type="button" class="btn btn-outline" data-rollback-organization>Отменить изменения</button>
+                        <button type="button" class="btn organization-save-button" data-save-organization>Сохранить изменения</button>
+                    </div>
                 {% endif %}
+            </div>
+        {% elif can_edit %}
+            <div class="organization-form-actions">
+                <span class="muted">После создания организации здесь появится действие удаления.</span>
                 <div class="organization-form-actions-right">
-                    <button type="reset" class="btn btn-outline">Отменить изменения</button>
-                    <button type="button" class="btn organization-save-button" data-save-organization>
-                        {% if create_mode %}Сохранить организацию{% else %}Сохранить изменения{% endif %}
-                    </button>
+                    <button type="button" class="btn btn-outline" data-rollback-organization>Отменить изменения</button>
+                    <button type="button" class="btn organization-save-button" data-save-organization>Сохранить организацию</button>
                 </div>
             </div>
         {% endif %}

@@ -18,7 +18,7 @@ stop:
 	docker compose down
 
 test:
-	$(PYTHON) -m unittest discover -s src/tests
+	$(PYTHON) -m pytest -q
 
 black:
 	cd src && ../$(BLACK) --config pyproject.toml .

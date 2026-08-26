@@ -57,6 +57,10 @@
     const applyButton = pageRoot.querySelector("[data-apply-filters]");
     const exportButton = pageRoot.querySelector("[data-export-table]");
     const resetButton = pageRoot.querySelector("[data-reset-filters]");
+    const fullRefreshButton = pageRoot.querySelector("[data-full-refresh]");
+    const fullRefreshStatus = pageRoot.querySelector("[data-full-refresh-status]");
+    const fullRefreshJobStorageKey = "active-organizations:full-refresh-job";
+    let fullRefreshStatusTimer = null;
     const staticFilterCheckboxes = Array.from(pageRoot.querySelectorAll("[data-static-filter-checkbox]"));
     const datatypeFilterCheckboxes = Array.from(pageRoot.querySelectorAll("[data-datatype-filter-checkbox]"));
     const checkboxFiltersDisclosure = pageRoot.querySelector("[data-checkbox-filters-disclosure]");
@@ -410,6 +414,92 @@
     resetButton?.addEventListener("click", () => {
         resetAllFilters();
     });
+
+    const renderFullRefreshStatus = (payload) => {
+        if (!(fullRefreshStatus instanceof HTMLElement)) {
+            return;
+        }
+        const result = payload.result || {};
+        const progress = result.total_candidates
+            ? ` Обработано: ${result.processed || 0} из ${result.total_candidates}.`
+            : "";
+        fullRefreshStatus.hidden = false;
+        fullRefreshStatus.textContent = `${result.message || payload.message || "Синхронизация выполняется."}${progress}`;
+    };
+
+    const monitorFullRefresh = async (jobId) => {
+        const template = pageRoot.dataset.dadataJobUrlTemplate || "";
+        if (!template) {
+            return;
+        }
+        const response = await fetch(template.replace("__JOB_ID__", encodeURIComponent(jobId)));
+        if (!response.ok) {
+            throw new Error("Не удалось получить статус синхронизации.");
+        }
+        const payload = await response.json();
+        renderFullRefreshStatus(payload);
+        if (["success", "failed", "rate_limited", "not_found", "skipped"].includes(payload.status)) {
+            window.sessionStorage.removeItem(fullRefreshJobStorageKey);
+            if (fullRefreshStatusTimer !== null) {
+                window.clearInterval(fullRefreshStatusTimer);
+                fullRefreshStatusTimer = null;
+            }
+        }
+    };
+
+    const startFullRefreshMonitor = (jobId) => {
+        window.sessionStorage.setItem(fullRefreshJobStorageKey, jobId);
+        monitorFullRefresh(jobId).catch((error) => {
+            if (fullRefreshStatus instanceof HTMLElement) {
+                fullRefreshStatus.hidden = false;
+                fullRefreshStatus.textContent = error instanceof Error ? error.message : "Не удалось получить статус синхронизации.";
+            }
+        });
+        if (fullRefreshStatusTimer === null) {
+            fullRefreshStatusTimer = window.setInterval(() => {
+                monitorFullRefresh(jobId).catch(() => undefined);
+            }, 10_000);
+        }
+    };
+
+    fullRefreshButton?.addEventListener("click", async () => {
+        const refreshUrl = pageRoot.dataset.fullRefreshUrl;
+        if (!(fullRefreshButton instanceof HTMLButtonElement) || !refreshUrl) {
+            return;
+        }
+        if (!window.confirm("Запустить полную синхронизацию данных?")) {
+            return;
+        }
+        fullRefreshButton.disabled = true;
+        if (fullRefreshStatus instanceof HTMLElement) {
+            fullRefreshStatus.hidden = false;
+            fullRefreshStatus.textContent = "Полная синхронизация поставлена в очередь.";
+        }
+        try {
+            const response = await fetch(refreshUrl, {method: "POST"});
+            if (!response.ok) {
+                throw new Error((await response.json()).detail || "Не удалось запустить синхронизацию.");
+            }
+            const payload = await response.json();
+            if (fullRefreshStatus instanceof HTMLElement) {
+                fullRefreshStatus.textContent = payload.message || "Синхронизация выполняется в фоне.";
+            }
+            if (payload.job_id) {
+                startFullRefreshMonitor(payload.job_id);
+            }
+        } catch (error) {
+            if (fullRefreshStatus instanceof HTMLElement) {
+                fullRefreshStatus.textContent = error instanceof Error ? error.message : "Не удалось запустить синхронизацию.";
+            }
+        } finally {
+            fullRefreshButton.disabled = false;
+        }
+    });
+
+    const pendingFullRefreshJobId = window.sessionStorage.getItem(fullRefreshJobStorageKey);
+    if (pendingFullRefreshJobId) {
+        startFullRefreshMonitor(pendingFullRefreshJobId);
+    }
 
     window.addEventListener("popstate", (event) => {
         const nextState = event.state?.activeOrganizations;

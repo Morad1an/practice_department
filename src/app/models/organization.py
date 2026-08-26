@@ -15,6 +15,7 @@ class OrganizationOrm(Base):
 
     name_long: Mapped[str | None] = mapped_column(String(1024))
     name_short: Mapped[str | None] = mapped_column(String(1024))
+    inn: Mapped[str | None] = mapped_column(String(10), index=True)
     chief_name: Mapped[str | None] = mapped_column(String(255))
     chief_post: Mapped[str | None] = mapped_column(String(255))
 

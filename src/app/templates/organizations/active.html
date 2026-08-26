@@ -95,6 +95,10 @@
     data-table-url="/api/organizations/active/table"
     data-export-url="/api/organizations/active/export"
     data-logotypes-url="/api/organizations/active/logotypes/batch"
+    {% if can_admin %}
+        data-full-refresh-url="{{ request.url_for('dadata_refresh_all_api') }}"
+        data-dadata-job-url-template="{{ request.url_for('dadata_job_status_api', job_id='__JOB_ID__') }}"
+    {% endif %}
 >
     <section class="card" aria-labelledby="filters-heading">
         <div class="card-header card-header-row">
@@ -187,7 +191,14 @@
                     <button type="button" class="btn btn-primary" data-apply-filters>Применить фильтры</button>
                     <button type="button" class="btn btn-outline" data-export-table>Выгрузить в Excel</button>
                     <button type="button" class="btn btn-outline" data-reset-filters>Сбросить</button>
+                    {% if can_admin and full_refresh_available %}
+                        <button type="button" class="btn btn-outline" data-full-refresh>Полная синхронизация данных</button>
+                    {% elif can_admin %}
+                        <button type="button" class="btn btn-outline" disabled title="Для полной синхронизации требуется Redis-очередь">Полная синхронизация данных</button>
+                        <span class="muted">Полная синхронизация недоступна: Redis не настроен.</span>
+                    {% endif %}
                 </div>
+                <p class="muted" data-full-refresh-status hidden></p>
             </div>
         </div>
     </section>

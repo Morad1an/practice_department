@@ -10,6 +10,9 @@
     const mapButton = form.querySelector("[data-show-on-map]");
     const saveButton = form.querySelector("[data-save-organization]");
     const deleteButton = form.querySelector("[data-delete-organization]");
+    const dadataLookupButton = form.querySelector("[data-dadata-lookup]");
+    const dadataRefreshButton = form.querySelector("[data-dadata-refresh]");
+    const rollbackButton = form.querySelector("[data-rollback-organization]");
     const logoFileInput = form.querySelector("[data-logo-file-input]");
     const uploadLogoTrigger = form.querySelector("[data-upload-logo-trigger]");
     const deleteLogoButton = form.querySelector("[data-delete-logo]");
@@ -46,6 +49,7 @@
     let toastTimerId = null;
     let confirmResolver = null;
     let documentModalState = null;
+    let formChanged = false;
     let contactClientKeyCounter = 0;
     const contactTypeOptions = (() => {
         try {
@@ -79,6 +83,13 @@
     const requisiteTypeDropdown = requisiteTypeSelect?.closest("[data-select-dropdown]") || null;
     const addRequisiteButton = form.querySelector("[data-add-requisite]");
     const selectDropdownNamespace = window.DistributionStatsPage || {};
+
+    form.addEventListener("input", () => {
+        formChanged = true;
+    });
+    form.addEventListener("change", () => {
+        formChanged = true;
+    });
 
     const escapeHtml = (value) =>
         String(value ?? "")
@@ -155,6 +166,8 @@
         [
             "[data-upload-logo-trigger]",
             "[data-delete-logo]",
+            "[data-dadata-lookup]",
+            "[data-dadata-refresh-all]",
             "[data-add-document]",
             "[data-document-editor]",
             "[data-document-modal-delete-pdf]",
@@ -390,6 +403,7 @@
     const normalizeOptionLabel = (value) => String(value || "").trim().toLowerCase();
     const isOtherRequisiteLabel = (value) => normalizeOptionLabel(value) === "другое";
     const isInnRequisiteLabel = (value) => normalizeOptionLabel(value) === "инн";
+    const normalizeLookupLabel = (value) => normalizeOptionLabel(value).replaceAll("ё", "е");
 
     const getRequisiteBaseLabel = (item) => {
         if (!(item instanceof HTMLElement)) {
@@ -632,6 +646,277 @@
             </div>
         `;
         return item;
+    };
+
+    const findRequisiteTypeOption = (labels) => {
+        const normalizedLabels = labels.map(normalizeLookupLabel);
+        return requisiteTypeOptions.find((option) => normalizedLabels.includes(normalizeLookupLabel(option?.label))) || null;
+    };
+
+    const findRequisiteItemByLabel = (labels) => {
+        const normalizedLabels = labels.map(normalizeLookupLabel);
+        return Array.from(form.querySelectorAll(".organization-requisite-item")).find((item) => (
+            item instanceof HTMLElement && normalizedLabels.includes(normalizeLookupLabel(getRequisiteBaseLabel(item)))
+        )) || null;
+    };
+
+    const ensureRequisiteValue = (labels, value) => {
+        const preparedValue = String(value || "").trim();
+        if (!preparedValue || !(requisitesList instanceof HTMLElement)) {
+            return false;
+        }
+        let item = findRequisiteItemByLabel(labels);
+        if (!(item instanceof HTMLElement)) {
+            const option = findRequisiteTypeOption(labels);
+            if (!option) {
+                return false;
+            }
+            item = buildRequisiteItem({
+                typeId: option.id,
+                label: option.label || labels[0],
+                value: preparedValue,
+                requiredInn: createMode && isInnRequisiteLabel(option.label),
+            });
+            requisitesList.appendChild(item);
+            syncRequisiteTypeSelectOptions();
+            updateMapButtonState();
+            return true;
+        }
+        const input = item.querySelector("[data-requisite-value-input]");
+        if (!(input instanceof HTMLInputElement) || input.value.trim() === preparedValue) {
+            return false;
+        }
+        input.value = preparedValue;
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        return true;
+    };
+
+    const findContactTypeOption = (labels) => {
+        const normalizedLabels = labels.map(normalizeLookupLabel);
+        return contactTypeOptions.find((option) => normalizedLabels.includes(normalizeLookupLabel(option?.label))) || null;
+    };
+
+    const ensureEmailContact = (email) => {
+        const preparedEmail = String(email || "").trim();
+        if (!preparedEmail || !(contactsTableBody instanceof HTMLElement)) {
+            return false;
+        }
+        const emailType = findContactTypeOption(["Email", "E-mail", "Электронная почта", "Почта"]);
+        if (!emailType) {
+            return false;
+        }
+        const emailTypeId = String(emailType.id ?? "");
+        const existingEmailRow = Array.from(contactsTableBody.querySelectorAll("[data-contact-method-row]")).find((row) => {
+            if (!(row instanceof HTMLElement)) {
+                return false;
+            }
+            const typeSelect = row.querySelector('select[name="contact_type_id"]');
+            return typeSelect instanceof HTMLSelectElement && typeSelect.value === emailTypeId;
+        });
+        if (existingEmailRow instanceof HTMLElement) {
+            const valueInput = existingEmailRow.querySelector('input[name="contact_value"]');
+            if (!(valueInput instanceof HTMLInputElement) || valueInput.value.trim() === preparedEmail) {
+                return false;
+            }
+            valueInput.value = preparedEmail;
+            return true;
+        }
+        const card = buildContactCard({
+            methods: [{ typeId: emailTypeId, value: preparedEmail }],
+        });
+        contactsTableBody.appendChild(card);
+        syncContactsEmptyState();
+        return true;
+    };
+
+    const getInnValue = () => {
+        const innItem = findRequisiteItemByLabel(["ИНН"]);
+        const innInput = innItem instanceof HTMLElement
+            ? innItem.querySelector("[data-requisite-value-input]")
+            : null;
+        return innInput instanceof HTMLInputElement ? innInput.value.trim() : "";
+    };
+
+    const applyDadataDataToForm = (data) => {
+        if (!data) {
+            return [];
+        }
+        const changed = [];
+        const fieldMap = [
+            ['input[name="name_short"]', data.name_short, "краткое наименование"],
+            ['textarea[name="name_long"]', data.name_long, "полное наименование"],
+            ['input[name="chief_name"]', data.chief_name, "руководитель"],
+            ['input[name="chief_post"]', data.chief_post, "должность руководителя"],
+        ];
+        fieldMap.forEach(([selector, value, label]) => {
+            const input = form.querySelector(selector);
+            const preparedValue = String(value || "").trim();
+            if ((input instanceof HTMLInputElement || input instanceof HTMLTextAreaElement) && preparedValue && input.value.trim() !== preparedValue) {
+                input.value = preparedValue;
+                changed.push(label);
+            }
+        });
+        if (ensureRequisiteValue(["ИНН"], data.inn)) {
+            changed.push("ИНН");
+        }
+        if (ensureRequisiteValue(["ОГРН"], data.ogrn)) {
+            changed.push("ОГРН");
+        }
+        if (ensureRequisiteValue(["КПП"], data.kpp)) {
+            changed.push("КПП");
+        }
+        if (ensureRequisiteValue(["Юридический адрес"], data.legal_address)) {
+            changed.push("юридический адрес");
+        }
+        if (ensureRequisiteValue(["Фактический адрес"], data.actual_address)) {
+            changed.push("фактический адрес");
+        }
+        if (ensureEmailContact(data.email)) {
+            changed.push("email");
+        }
+        updateMapButtonState();
+        return changed;
+    };
+
+    const getDadataJobUrl = (jobId) => {
+        const template = form.dataset.dadataJobUrlTemplate || "";
+        return template.replace("__JOB_ID__", encodeURIComponent(jobId));
+    };
+
+    const pollDadataJob = async (jobId) => {
+        const jobUrl = getDadataJobUrl(jobId);
+        if (!jobUrl) {
+            throw new Error("Не настроен адрес проверки статуса синхронизации.");
+        }
+        for (let attempt = 0; attempt < 450; attempt += 1) {
+            const response = await fetch(jobUrl);
+            if (!response.ok) {
+                throw new Error(await readErrorMessage(response));
+            }
+            const payload = await response.json();
+            if (!new Set(["queued", "running"]).has(payload.status)) {
+                return payload;
+            }
+            setStatus(payload.status === "running" ? "Синхронизация выполняется..." : "Запрос ожидает обработки...", "info");
+            await new Promise((resolve) => window.setTimeout(resolve, attempt < 10 ? 1000 : 2000));
+        }
+        throw new Error("Синхронизация выполняется слишком долго. Повторите проверку позднее.");
+    };
+
+    const resolveDadataOperation = async (payload) => {
+        if (payload.status === "queued") {
+            if (!payload.job_id) {
+                throw new Error("Не получен идентификатор задачи синхронизации.");
+            }
+            const job = await pollDadataJob(payload.job_id);
+            return {
+                status: job.status,
+                result: job.result,
+                message: job.message,
+            };
+        }
+
+        return {
+            status: new Set(["ready", "updated"]).has(payload.status) ? "success" : payload.status,
+            result: payload,
+            message: payload.message,
+        };
+    };
+
+    const runDadataLookup = async () => {
+        if (!(dadataLookupButton instanceof HTMLButtonElement) || !form.dataset.dadataLookupUrl) {
+            return;
+        }
+        const inn = getInnValue();
+        if (!inn) {
+            setStatus("Введите ИНН перед добавлением организации.", "error");
+            return;
+        }
+        dadataLookupButton.disabled = true;
+        setStatus("Поиск данных ЕГРЮЛ...", "info");
+        try {
+            const response = await fetch(form.dataset.dadataLookupUrl, {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({inn}),
+            });
+            if (!response.ok) {
+                throw new Error(await readErrorMessage(response));
+            }
+            const payload = await response.json();
+            const operation = await resolveDadataOperation(payload);
+            const result = operation.result;
+            if (payload.existing_organization_id) {
+                if (
+                    operation.status !== "success"
+                    || !new Set(["ready", "updated"]).has(result?.status)
+                    || !payload.existing_organization_url
+                ) {
+                    setStatus(
+                        result?.message || operation.message || "Не удалось обновить организацию с таким ИНН.",
+                        "error",
+                    );
+                    return;
+                }
+                persistToastForRedirect(
+                    result.message || "Данные существующей организации синхронизированы.",
+                    "success",
+                );
+                window.location.assign(payload.existing_organization_url);
+                return;
+            }
+            if (operation.status !== "success" || result?.status !== "ready" || !result.data) {
+                const informational = new Set(["not_found", "skipped"]).has(operation.status);
+                setStatus(result?.message || operation.message || "Не удалось найти данные организации.", informational ? "info" : "error");
+                return;
+            }
+            const changed = applyDadataDataToForm(result.data);
+            window.scrollTo({top: 0, behavior: "smooth"});
+            setStatus("");
+            const missingSuffix = result.missing_fields?.length
+                ? ` Не заполнено полей: ${result.missing_fields.length}.`
+                : "";
+            showToast(
+                changed.length ? `Данные организации подставлены в форму.${missingSuffix}` : "Новых данных для заполнения не найдено.",
+                changed.length ? "success" : "info",
+            );
+        } catch (error) {
+            setStatus(error instanceof Error ? error.message : "Не удалось получить данные организации.", "error");
+        } finally {
+            dadataLookupButton.disabled = false;
+        }
+    };
+
+    const runDadataRefresh = async () => {
+        if (!(dadataRefreshButton instanceof HTMLButtonElement) || !form.dataset.dadataRefreshUrl) {
+            return;
+        }
+        dadataRefreshButton.disabled = true;
+        setStatus("Синхронизация данных с ЕГРЮЛ...", "info");
+        try {
+            const response = await fetch(form.dataset.dadataRefreshUrl, {method: "POST"});
+            if (!response.ok) {
+                throw new Error(await readErrorMessage(response));
+            }
+            const payload = await response.json();
+            const operation = await resolveDadataOperation(payload);
+            if (operation.status !== "success" || operation.result?.status !== "updated") {
+                setStatus(
+                    operation.result?.message || operation.message || "Не удалось обновить данные организации.",
+                    operation.status === "not_found" ? "info" : "error",
+                );
+                return;
+            }
+            persistToastForRedirect(
+                operation.result.message || "Данные организации синхронизированы.",
+                "success",
+            );
+            window.location.reload();
+        } catch (error) {
+            setStatus(error instanceof Error ? error.message : "Не удалось обновить данные организации.", "error");
+        } finally {
+            dadataRefreshButton.disabled = false;
+        }
     };
 
     const addSelectedRequisite = () => {
@@ -1427,11 +1712,30 @@
                 window.location.assign(payload.redirect_url);
                 return;
             }
-            showToast(successMessage, "success");
+            persistToastForRedirect(successMessage, "success");
+            window.location.reload();
+            return;
         } catch (error) {
             setStatus(error instanceof Error ? error.message : "Не удалось сохранить изменения.", "error");
         } finally {
             saveButton.disabled = false;
+        }
+    });
+
+    dadataLookupButton?.addEventListener("click", runDadataLookup);
+    dadataRefreshButton?.addEventListener("click", runDadataRefresh);
+    rollbackButton?.addEventListener("click", async () => {
+        if (!formChanged) {
+            window.location.reload();
+            return;
+        }
+        const confirmed = await confirmAction({
+            title: "Отменить несохранённые изменения?",
+            message: "Страница будет загружена заново, а значения вернутся к сохранённым данным.",
+            confirmLabel: "Отменить изменения",
+        });
+        if (confirmed) {
+            window.location.reload();
         }
     });
 

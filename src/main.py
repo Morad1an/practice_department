@@ -1,4 +1,5 @@
 import sys
+from contextlib import asynccontextmanager
 from pathlib import Path
 from urllib.parse import quote
 
@@ -9,14 +10,29 @@ from fastapi.staticfiles import StaticFiles
 sys.path.append(str(Path(__file__).parent.parent))
 
 from src.app.api.auth_pages import router as auth_page_router
+from src.app.api.dadata import router as dadata_router
 from src.app.api.organizations import api_router, page_router
 from src.app.config import settings
 from src.app.database import engine
 from src.app.services.auth import resolve_auth_user_from_session_cookie
 from src.app.services.csrf import ensure_request_csrf_token, validate_request_csrf
+from src.app.services.dadata.client import close_dadata_client
+from src.app.services.dadata.runtime import close_dadata_runtime
 from src.app.services.logotypes_batch import close_logo_cache
 
-app = FastAPI()
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    try:
+        yield
+    finally:
+        await close_dadata_client()
+        await close_dadata_runtime()
+        await close_logo_cache()
+        await engine.dispose()
+
+
+app = FastAPI(lifespan=lifespan)
 
 static_dir = Path(__file__).resolve().parent / "app" / "static"
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
@@ -63,6 +79,7 @@ def _set_csrf_cookie(response, csrf_token: str) -> None:
 async def auth_session_middleware(request: Request, call_next):
     request.state.current_user = None
     request.state.can_edit = False
+    request.state.can_admin = False
     request.state.csrf_token, csrf_cookie_needs_refresh = ensure_request_csrf_token(request)
     is_public_path = _is_public_path(request.url.path)
 
@@ -70,6 +87,9 @@ async def auth_session_middleware(request: Request, call_next):
         request.state.current_user = await resolve_auth_user_from_session_cookie(request)
         request.state.can_edit = bool(
             request.state.current_user is not None and request.state.current_user.can_edit
+        )
+        request.state.can_admin = bool(
+            request.state.current_user is not None and request.state.current_user.can_admin
         )
 
     if not is_public_path and request.state.current_user is None:
@@ -120,9 +140,4 @@ async def auth_session_middleware(request: Request, call_next):
 app.include_router(auth_page_router)
 app.include_router(page_router)
 app.include_router(api_router)
-
-
-@app.on_event("shutdown")
-async def close_resources():
-    await close_logo_cache()
-    await engine.dispose()
+app.include_router(dadata_router)

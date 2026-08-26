@@ -191,7 +191,7 @@ class OrganizationCardWriteTests(unittest.IsolatedAsyncioTestCase):
             prepared_payload.requisites.append(
                 OrganizationCardRequisiteInput(
                     type_id=inn_type_id,
-                    value="7812345678",
+                    value=f"78{time.time_ns() % 100_000_000:08d}",
                 )
             )
         return prepared_payload
@@ -357,6 +357,114 @@ class OrganizationCardWriteTests(unittest.IsolatedAsyncioTestCase):
                 await save_organization_card(session, payload=payload)
             await session.rollback()
 
+    async def test_create_rejects_malformed_inn(self):
+        inn_type_id = await self._fetch_requisite_type_id("ИНН")
+        payload = build_valid_payload(suffix=self._unique_suffix("bad-inn"))
+        payload.requisites = [
+            OrganizationCardRequisiteInput(type_id=inn_type_id, value="771-940-2047")
+        ]
+        async with async_session_maker() as session:
+            with self.assertRaisesRegex(OrganizationCardValidationError, "10 цифр"):
+                await save_organization_card(session, payload=payload)
+            await session.rollback()
+
+    async def test_create_rejects_duplicate_inn(self):
+        first_id = await self._create_organization()
+        inn_type_id = await self._fetch_requisite_type_id("ИНН")
+        async with async_session_maker() as session:
+            first_inn = await session.scalar(
+                select(OrganizationOrm.inn).where(OrganizationOrm.id == first_id)
+            )
+        payload = build_valid_payload(suffix=self._unique_suffix("duplicate-inn"))
+        payload.requisites = [OrganizationCardRequisiteInput(type_id=inn_type_id, value=first_inn)]
+        async with async_session_maker() as session:
+            with self.assertRaisesRegex(OrganizationCardValidationError, "уже существует"):
+                await save_organization_card(session, payload=payload)
+            await session.rollback()
+
+    async def test_update_rejects_change_to_an_occupied_inn(self):
+        inn_type_id = await self._fetch_requisite_type_id("ИНН")
+        first_id = await self._create_organization()
+        second_id = await self._create_organization()
+        async with async_session_maker() as session:
+            first_inn = await session.scalar(
+                select(OrganizationOrm.inn).where(OrganizationOrm.id == first_id)
+            )
+            second_inn_requisite_id = await session.scalar(
+                select(OrganizationDetailLegalInformation.id).where(
+                    OrganizationDetailLegalInformation.organization_id == second_id,
+                    OrganizationDetailLegalInformation.type_id == inn_type_id,
+                )
+            )
+        payload = build_valid_payload(suffix=self._unique_suffix("occupied-update"))
+        payload.requisites = [
+            OrganizationCardRequisiteInput(
+                id=second_inn_requisite_id,
+                type_id=inn_type_id,
+                value=first_inn,
+            )
+        ]
+
+        async with async_session_maker() as session:
+            with self.assertRaisesRegex(OrganizationCardValidationError, "уже существует"):
+                await save_organization_card(
+                    session,
+                    payload=payload,
+                    organization_id=second_id,
+                )
+            await session.rollback()
+
+    async def test_legacy_duplicate_inn_can_be_saved_without_changing_inn(self):
+        inn_type_id = await self._fetch_requisite_type_id("ИНН")
+        first_id = await self._create_organization()
+        async with async_session_maker() as session:
+            first_inn = await session.scalar(
+                select(OrganizationOrm.inn).where(OrganizationOrm.id == first_id)
+            )
+            legacy_organization = OrganizationOrm(inn=first_inn)
+            session.add(legacy_organization)
+            await session.flush()
+            session.add(
+                OrganizationDetailLegalInformation(
+                    organization_id=legacy_organization.id,
+                    type_id=inn_type_id,
+                    data=first_inn,
+                )
+            )
+            await session.commit()
+            legacy_id = legacy_organization.id
+        self.created_organization_ids.append(legacy_id)
+
+        payload = build_valid_payload(suffix=self._unique_suffix("legacy-duplicate-update"))
+        async with async_session_maker() as session:
+            legacy_inn_requisite_id = await session.scalar(
+                select(OrganizationDetailLegalInformation.id).where(
+                    OrganizationDetailLegalInformation.organization_id == legacy_id,
+                    OrganizationDetailLegalInformation.type_id == inn_type_id,
+                )
+            )
+        payload.requisites = [
+            OrganizationCardRequisiteInput(
+                id=legacy_inn_requisite_id,
+                type_id=inn_type_id,
+                value=first_inn,
+            )
+        ]
+        async with async_session_maker() as session:
+            await save_organization_card(
+                session,
+                payload=payload,
+                organization_id=legacy_id,
+            )
+
+        async with async_session_maker() as session:
+            self.assertEqual(
+                await session.scalar(
+                    select(OrganizationOrm.inn).where(OrganizationOrm.id == legacy_id)
+                ),
+                first_inn,
+            )
+
     async def test_create_does_not_require_other_requisites_when_inn_present(self):
         inn_type_id = await self._fetch_requisite_type_id("ИНН")
         payload = build_valid_payload(suffix=self._unique_suffix("only-inn"))
@@ -388,7 +496,7 @@ class OrganizationCardWriteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(card.chief_name, payload.chief_name)
         self.assertEqual(card.chief_post, payload.chief_post)
         requisites = {requisite.label: requisite.value for requisite in card.requisites}
-        self.assertEqual(requisites["ИНН"], "7812345678")
+        self.assertEqual(requisites["ИНН"], payload.requisites[0].value)
 
     async def test_update_saves_base_fields(self):
         organization_id = await self._create_organization()
@@ -683,8 +791,9 @@ class OrganizationCardWriteTests(unittest.IsolatedAsyncioTestCase):
                 value="101000, г. Москва, ул. Тверская, д. 5",
             ),
             OrganizationCardRequisiteInput(
+                id=original_requisites["ИНН"].id,
                 type_id=inn_type_id,
-                value="7812345678",
+                value=original_requisites["ИНН"].value,
             ),
         ]
 
@@ -704,7 +813,7 @@ class OrganizationCardWriteTests(unittest.IsolatedAsyncioTestCase):
             updated_requisites["Фактический адрес"],
             "101000, г. Москва, ул. Тверская, д. 5",
         )
-        self.assertEqual(updated_requisites["ИНН"], "7812345678")
+        self.assertEqual(updated_requisites["ИНН"], original_requisites["ИНН"].value)
         self.assertEqual(
             updated_card.map_query,
             "101000, г. Москва, ул. Тверская, д. 5",

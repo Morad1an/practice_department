@@ -16,13 +16,13 @@ from src.app.config import settings
 from src.app.database import async_session_maker
 from src.app.models.app_user import AppUserOrm
 
-AuthRole = Literal["viewer", "editor"]
+AuthRole = Literal["viewer", "editor", "admin"]
 _PASSWORD_ITERATIONS = 310_000
 _SCRYPT_N = 2**14
 _SCRYPT_R = 8
 _SCRYPT_P = 1
 _SESSION_SALT = "diplom-auth-session"
-_VALID_ROLES: set[str] = {"viewer", "editor"}
+_VALID_ROLES: set[str] = {"viewer", "editor", "admin"}
 _DUMMY_PASSWORD_HASH = (
     "pbkdf2_sha256$310000$ZHVtbXlfc2FsdF8xMjM0NTY3OA==$"
     "$"
@@ -39,7 +39,11 @@ class AuthenticatedUser:
 
     @property
     def can_edit(self) -> bool:
-        return self.role == "editor"
+        return self.role in {"editor", "admin"}
+
+    @property
+    def can_admin(self) -> bool:
+        return self.role == "admin"
 
 
 def normalize_username(username: str) -> str:
@@ -54,7 +58,7 @@ def normalize_username(username: str) -> str:
 def normalize_role(role: str) -> AuthRole:
     prepared = (role or "").strip().lower()
     if prepared not in _VALID_ROLES:
-        raise ValueError("Допустимые роли: viewer, editor.")
+        raise ValueError("Допустимые роли: viewer, editor, admin.")
     return prepared  # type: ignore[return-value]
 
 

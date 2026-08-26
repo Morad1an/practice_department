@@ -26,3 +26,13 @@ def require_editor_user(request: Request) -> AuthenticatedUser:
             detail="Недостаточно прав для изменения данных.",
         )
     return user
+
+
+def require_admin_user(request: Request) -> AuthenticatedUser:
+    user = require_authenticated_user(request)
+    if not user.can_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Действие доступно только администратору.",
+        )
+    return user

@@ -16,7 +16,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--role",
         required=True,
-        choices=["viewer", "editor"],
+        choices=["viewer", "editor", "admin"],
         help="Access role",
     )
     parser.add_argument(

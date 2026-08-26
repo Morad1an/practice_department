@@ -3,6 +3,7 @@ from pathlib import Path
 from fastapi import Request
 from fastapi.templating import Jinja2Templates
 
+from src.app.config import settings
 from src.app.database import async_session_maker
 from src.app.schemas.organizations import (
     ActiveOrganizationsFilters,
@@ -68,6 +69,8 @@ async def build_active_organizations_page_context(
     return {
         "request": request,
         "can_edit": bool(getattr(request.state, "can_edit", False)),
+        "can_admin": bool(getattr(request.state, "can_admin", False)),
+        "full_refresh_available": bool(settings.REDIS_URL),
         "filters": filters,
         "custom_sort_requested": custom_sort_requested,
         "rows": prepared_rows,
@@ -212,6 +215,7 @@ async def build_organization_detail_page_context(
     return {
         "request": request,
         "can_edit": bool(getattr(request.state, "can_edit", False)),
+        "can_admin": bool(getattr(request.state, "can_admin", False)),
         "active_tab": None,
         "create_mode": False,
         "organization": organization_payload,
@@ -240,6 +244,7 @@ async def build_new_organization_page_context(request: Request) -> dict:
     return {
         "request": request,
         "can_edit": bool(getattr(request.state, "can_edit", False)),
+        "can_admin": bool(getattr(request.state, "can_admin", False)),
         "active_tab": None,
         "create_mode": True,
         "organization": organization.model_dump(),

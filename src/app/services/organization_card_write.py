@@ -693,6 +693,47 @@ async def _validate_create_required_requisites(
         raise OrganizationCardValidationError("Поле «ИНН» обязательно при создании организации.")
 
 
+async def _sync_organization_inn(session: AsyncSession, *, organization: OrganizationOrm) -> None:
+    previous_inn = organization.inn
+    inn_values = list(
+        (
+            await session.execute(
+                select(OrganizationDetailLegalInformation.data)
+                .join(
+                    DetailnameLegalInformation,
+                    DetailnameLegalInformation.id == OrganizationDetailLegalInformation.type_id,
+                )
+                .where(OrganizationDetailLegalInformation.organization_id == organization.id)
+                .where(func.lower(DetailnameLegalInformation.name) == "инн")
+            )
+        ).scalars()
+    )
+    prepared_values = [value.strip() for value in inn_values if value and value.strip()]
+    if len(prepared_values) > 1:
+        raise OrganizationCardValidationError(
+            "У организации может быть только один реквизит «ИНН»."
+        )
+    if not prepared_values:
+        organization.inn = None
+        return
+    inn = prepared_values[0]
+    if not re.fullmatch(r"\d{10}", inn):
+        raise OrganizationCardValidationError("ИНН должен состоять ровно из 10 цифр.")
+    # Historical cards may already share an INN (for example, a head office and
+    # its branches). They must remain editable while the INN itself is unchanged.
+    # A newly entered or changed INN still follows the manual uniqueness rule.
+    if inn != previous_inn:
+        existing_id = await session.scalar(
+            select(OrganizationOrm.id)
+            .where(OrganizationOrm.inn == inn)
+            .where(OrganizationOrm.id != organization.id)
+            .limit(1)
+        )
+        if existing_id is not None:
+            raise OrganizationCardValidationError("Организация с таким ИНН уже существует.")
+    organization.inn = inn
+
+
 async def save_organization_card(
     session: AsyncSession,
     *,
@@ -763,6 +804,8 @@ async def save_organization_card(
         organization_id=organization.id,
         requisites=payload.requisites,
     )
+    await session.flush()
+    await _sync_organization_inn(session, organization=organization)
     await _sync_study_fields(
         session,
         organization_id=organization.id,
