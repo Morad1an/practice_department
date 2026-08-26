@@ -37,6 +37,8 @@ from src.app.schemas.organizations import (
     OrganizationCardSavePayload,
     OrganizationCardSaveResult,
     OrganizationDeleteResult,
+    OrganizationDeletionPreview,
+    OrganizationDeletionPreviewItem,
     OrganizationDocumentCreatePayload,
     OrganizationDocumentUpdatePayload,
     OrganizationHeaderSearchResponse,
@@ -62,12 +64,12 @@ from src.app.services.logotypes_batch import fetch_logotypes_batch
 from src.app.services.organization_card_write import (
     OrganizationCardNotFoundError,
     OrganizationCardValidationError,
-    OrganizationDeleteBlockedError,
     add_organization_document,
     archive_organization_document,
     delete_organization_document_pdf,
     delete_organization_logo,
     delete_organization_safely,
+    get_organization_deletion_preview,
     get_organization_document_pdf,
     save_organization_card,
     save_organization_logo,
@@ -93,14 +95,6 @@ _MAX_PDF_SIZE_BYTES = 20 * 1024 * 1024
 def _raise_card_api_error(error: Exception) -> None:
     if isinstance(error, OrganizationCardNotFoundError):
         raise HTTPException(status_code=404, detail=str(error)) from error
-    if isinstance(error, OrganizationDeleteBlockedError):
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail={
-                "message": str(error),
-                "reasons": error.reasons,
-            },
-        ) from error
     if isinstance(error, OrganizationCardValidationError):
         raise HTTPException(status_code=422, detail=str(error)) from error
     raise error
@@ -740,4 +734,28 @@ async def delete_organization(
     return OrganizationDeleteResult(
         organization_id=organization_id,
         message="Организация удалена.",
+    )
+
+
+@router.get(
+    "/api/organizations/{organization_id}/deletion-preview",
+    response_model=OrganizationDeletionPreview,
+    name="organization_deletion_preview_api",
+)
+async def organization_deletion_preview(
+    organization_id: int,
+    _: None = Depends(require_editor_user),
+):
+    async with async_session_maker() as session:
+        try:
+            items = await get_organization_deletion_preview(
+                session,
+                organization_id=organization_id,
+            )
+        except Exception as error:  # pragma: no cover - normalized below
+            _raise_card_api_error(error)
+
+    return OrganizationDeletionPreview(
+        organization_id=organization_id,
+        items=[OrganizationDeletionPreviewItem(label=label, count=count) for label, count in items],
     )

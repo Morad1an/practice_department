@@ -41,6 +41,7 @@
         {% if not create_mode %}
             data-organization-id="{{ organization.id }}"
             data-delete-url="{{ request.url_for('delete_organization_api', organization_id=organization.id) }}"
+            data-deletion-preview-url="{{ request.url_for('organization_deletion_preview_api', organization_id=organization.id) }}"
             data-dadata-refresh-url="{{ request.url_for('dadata_organization_refresh_api', organization_id=organization.id) }}"
             data-add-document-url="{{ request.url_for('add_organization_document_api', organization_id=organization.id) }}"
             data-upload-logo-url="{{ request.url_for('upload_organization_logo_api', organization_id=organization.id) }}"
@@ -382,11 +383,11 @@
                             >
                                 <div class="organization-document-meta">
                                     {% if actual_document %}
-                                        <strong>{{ actual_document.title }}</strong>
+                                        <strong>{{ actual_document.datatype_label or group.datatype_label }}</strong>
                                         <div class="muted">
-                                            <span>{{ actual_document.datatype_label or group.datatype_label }}</span>
-                                            {% if actual_document.name_secondary %} · {{ actual_document.name_secondary }}{% endif %}
-                                            {% if actual_document.signing_date %} · {{ actual_document.signing_date.strftime('%d.%m.%Y') }}{% endif %}
+                                            {% if actual_document.name_primary %}<span>Внутренний номер: {{ actual_document.name_primary }}</span>{% endif %}
+                                            {% if actual_document.name_secondary %}<span>{% if actual_document.name_primary %} · {% endif %}Внешний номер: {{ actual_document.name_secondary }}</span>{% endif %}
+                                            {% if actual_document.signing_date %}<span>{% if actual_document.name_primary or actual_document.name_secondary %} · {% endif %}Дата подписания: {{ actual_document.signing_date.strftime('%d.%m.%Y') }}</span>{% endif %}
                                         </div>
                                     {% else %}
                                         <strong>{{ group.datatype_label }}</strong>
@@ -428,11 +429,11 @@
                                                 data-document-pdf-filename="{{ document.pdf_filename or '' }}"
                                             >
                                                 <div class="organization-document-meta">
-                                                    <strong>{{ document.title }}</strong>
+                                                    <strong>{{ document.datatype_label or group.datatype_label }}</strong>
                                                     <div class="muted">
-                                                        <span>{{ document.datatype_label or group.datatype_label }}</span>
-                                                        {% if document.name_secondary %} · {{ document.name_secondary }}{% endif %}
-                                                        {% if document.signing_date %} · {{ document.signing_date.strftime('%d.%m.%Y') }}{% endif %}
+                                                        {% if document.name_primary %}<span>Внутренний номер: {{ document.name_primary }}</span>{% endif %}
+                                                        {% if document.name_secondary %}<span>{% if document.name_primary %} · {% endif %}Внешний номер: {{ document.name_secondary }}</span>{% endif %}
+                                                        {% if document.signing_date %}<span>{% if document.name_primary or document.name_secondary %} · {% endif %}Дата подписания: {{ document.signing_date.strftime('%d.%m.%Y') }}</span>{% endif %}
                                                     </div>
                                                 </div>
                                                 <div class="organization-document-actions">

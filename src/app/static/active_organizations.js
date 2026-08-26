@@ -48,6 +48,7 @@
     const exportUrl = pageRoot.dataset.exportUrl;
     const logotypesUrl = pageRoot.dataset.logotypesUrl;
     const pageUrl = pageRoot.dataset.pageUrl || window.location.pathname;
+    const deletionNotice = pageRoot.querySelector("[data-deletion-notice]");
     const scrollTopButton = document.querySelector("[data-scroll-top]");
     const dropdowns = Array.from(pageRoot.querySelectorAll("[data-filter-dropdown]"));
     const summaryRoot = pageRoot.querySelector("[data-filter-summary]");
@@ -72,6 +73,25 @@
         "Content-Type": "application/json",
         "X-Requested-With": "fetch",
     };
+
+    const restoreDeletionNotice = () => {
+        if (!(deletionNotice instanceof HTMLElement)) {
+            return;
+        }
+        try {
+            const message = window.sessionStorage.getItem("active-organizations:deletion-toast");
+            if (!message) {
+                return;
+            }
+            window.sessionStorage.removeItem("active-organizations:deletion-toast");
+            deletionNotice.textContent = message;
+            deletionNotice.hidden = false;
+        } catch {
+            // Ignore unavailable browser storage.
+        }
+    };
+
+    restoreDeletionNotice();
 
     const escapeHtml = (value) => String(value)
         .replaceAll("&", "&amp;")

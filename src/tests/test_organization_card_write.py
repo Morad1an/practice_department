@@ -3,6 +3,7 @@ import time
 import unittest
 from datetime import date
 from io import BytesIO
+from unittest.mock import AsyncMock, patch
 
 from PIL import Image
 from sqlalchemy import delete, select
@@ -39,11 +40,11 @@ from src.app.services.logotypes_batch import close_logo_cache
 from src.app.services.organization_card import fetch_organization_card_page
 from src.app.services.organization_card_write import (
     OrganizationCardValidationError,
-    OrganizationDeleteBlockedError,
     add_organization_document,
     archive_organization_document,
     delete_organization_logo,
     delete_organization_safely,
+    get_organization_deletion_preview,
     get_organization_document_pdf,
     save_organization_card,
     save_organization_logo,
@@ -1113,32 +1114,27 @@ class OrganizationCardWriteTests(unittest.IsolatedAsyncioTestCase):
             deleted_organization = await session.get(OrganizationOrm, organization_id)
         self.assertIsNone(deleted_organization)
 
-    async def test_delete_is_blocked_when_contract_exists(self):
+    async def test_deletion_preview_lists_dependent_contracts_pdf_and_statistics(self):
         organization_id = await self._create_organization()
         datatype_id = await self._fetch_contract_datatype_id()
 
         async with async_session_maker() as session:
-            await add_organization_document(
+            document_id = await add_organization_document(
                 session,
                 organization_id=organization_id,
                 payload=OrganizationDocumentCreatePayload(
-                    name_primary="BLOCK-1",
+                    name_primary="DELETE-1",
                     datatype_id=datatype_id,
                 ),
             )
-
-        async with async_session_maker() as session:
-            with self.assertRaises(OrganizationDeleteBlockedError) as caught:
-                await delete_organization_safely(session, organization_id=organization_id)
-            await session.rollback()
-
-        self.assertTrue(caught.exception.reasons)
-        self.assertTrue(any(reason.endswith(": 1") for reason in caught.exception.reasons))
-
-    async def test_delete_is_blocked_when_distribution_statistic_exists(self):
-        organization_id = await self._create_organization()
-
-        async with async_session_maker() as session:
+            await update_organization_document(
+                session,
+                organization_id=organization_id,
+                document_id=document_id,
+                payload=OrganizationDocumentUpdatePayload(name_primary="DELETE-1"),
+                pdf_bytes=build_test_pdf_bytes(),
+                pdf_filename="delete.pdf",
+            )
             session.add(
                 OrganizationDistributionStatistic(
                     id=int(time.time_ns() % 1_000_000_000),
@@ -1150,12 +1146,99 @@ class OrganizationCardWriteTests(unittest.IsolatedAsyncioTestCase):
             await session.commit()
 
         async with async_session_maker() as session:
-            with self.assertRaises(OrganizationDeleteBlockedError) as caught:
-                await delete_organization_safely(session, organization_id=organization_id)
-            await session.rollback()
+            preview = await get_organization_deletion_preview(
+                session, organization_id=organization_id
+            )
 
-        self.assertTrue(caught.exception.reasons)
-        self.assertTrue(any(reason.endswith(": 1") for reason in caught.exception.reasons))
+        self.assertEqual(
+            dict(preview),
+            {
+                "PDF-файлы договоров": 1,
+                "договоры": 1,
+                "статистика распределения": 1,
+                "реквизиты": 1,
+            },
+        )
+
+    async def test_delete_cascades_contracts_pdf_and_distribution_statistics(self):
+        organization_id = await self._create_organization()
+        datatype_id = await self._fetch_contract_datatype_id()
+
+        async with async_session_maker() as session:
+            document_id = await add_organization_document(
+                session,
+                organization_id=organization_id,
+                payload=OrganizationDocumentCreatePayload(
+                    name_primary="CASCADE-1",
+                    datatype_id=datatype_id,
+                ),
+            )
+            await update_organization_document(
+                session,
+                organization_id=organization_id,
+                document_id=document_id,
+                payload=OrganizationDocumentUpdatePayload(name_primary="CASCADE-1"),
+                pdf_bytes=build_test_pdf_bytes(),
+                pdf_filename="cascade.pdf",
+            )
+            session.add(
+                OrganizationDistributionStatistic(
+                    id=int(time.time_ns() % 1_000_000_000),
+                    organization_id=organization_id,
+                    year=2026,
+                    stat_number=1,
+                )
+            )
+            await session.commit()
+
+        async with async_session_maker() as session:
+            await delete_organization_safely(session, organization_id=organization_id)
+
+        self._remove_from_cleanup(organization_id)
+
+        async with async_session_maker() as session:
+            self.assertIsNone(await session.get(OrganizationOrm, organization_id))
+            self.assertIsNone(await session.get(ContractOrm, document_id))
+            self.assertIsNone(
+                await session.scalar(
+                    select(ContractPdfDocument.id).where(
+                        ContractPdfDocument.contract_id == document_id
+                    )
+                )
+            )
+            self.assertIsNone(
+                await session.scalar(
+                    select(OrganizationDistributionStatistic.id).where(
+                        OrganizationDistributionStatistic.organization_id == organization_id
+                    )
+                )
+            )
+
+    async def test_delete_rolls_back_everything_when_orphan_logo_cleanup_fails(self):
+        organization_id = await self._create_organization()
+        datatype_id = await self._fetch_contract_datatype_id()
+
+        async with async_session_maker() as session:
+            document_id = await add_organization_document(
+                session,
+                organization_id=organization_id,
+                payload=OrganizationDocumentCreatePayload(
+                    name_primary="ROLLBACK-1",
+                    datatype_id=datatype_id,
+                ),
+            )
+
+        async with async_session_maker() as session:
+            with patch(
+                "src.app.services.organization_card_write._delete_orphan_logotype",
+                new=AsyncMock(side_effect=RuntimeError("logo cleanup failed")),
+            ):
+                with self.assertRaisesRegex(RuntimeError, "logo cleanup failed"):
+                    await delete_organization_safely(session, organization_id=organization_id)
+
+        async with async_session_maker() as session:
+            self.assertIsNotNone(await session.get(OrganizationOrm, organization_id))
+            self.assertIsNotNone(await session.get(ContractOrm, document_id))
 
 
 if __name__ == "__main__":

@@ -136,6 +136,35 @@ class AuthAccessTests(unittest.TestCase):
             {"detail": "Недостаточно прав для изменения данных."},
         )
 
+    def test_deletion_preview_is_available_to_editor_and_admin_but_not_viewer(self):
+        with patch(
+            "src.main.resolve_auth_user_from_session_cookie",
+            new=AsyncMock(return_value=build_user(role="viewer")),
+        ):
+            viewer_response = self.client.get("/api/organizations/77/deletion-preview")
+
+        self.assertEqual(viewer_response.status_code, 403)
+
+        for role in ("editor", "admin"):
+            with self.subTest(role=role):
+                with (
+                    patch(
+                        "src.main.resolve_auth_user_from_session_cookie",
+                        new=AsyncMock(return_value=build_user(role=role)),
+                    ),
+                    patch(
+                        "src.app.api.organizations_api.get_organization_deletion_preview",
+                        new=AsyncMock(return_value=[("договоры", 2)]),
+                    ),
+                ):
+                    response = self.client.get("/api/organizations/77/deletion-preview")
+
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(
+                    response.json(),
+                    {"organization_id": 77, "items": [{"label": "договоры", "count": 2}]},
+                )
+
     def test_editor_can_create_organization(self):
         with (
             patch(

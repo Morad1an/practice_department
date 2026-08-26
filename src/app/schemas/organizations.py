@@ -473,6 +473,16 @@ class OrganizationDeleteResult(BaseModel):
     message: str
 
 
+class OrganizationDeletionPreviewItem(BaseModel):
+    label: str
+    count: int
+
+
+class OrganizationDeletionPreview(BaseModel):
+    organization_id: int
+    items: list[OrganizationDeletionPreviewItem] = Field(default_factory=list)
+
+
 class OrganizationHeaderSearchItem(BaseModel):
     organization_id: int
     name_short: str | None = None

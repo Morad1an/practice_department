@@ -50,6 +50,7 @@
     let confirmResolver = null;
     let documentModalState = null;
     let formChanged = false;
+    let initialFormSnapshot = "";
     let contactClientKeyCounter = 0;
     const contactTypeOptions = (() => {
         try {
@@ -83,13 +84,6 @@
     const requisiteTypeDropdown = requisiteTypeSelect?.closest("[data-select-dropdown]") || null;
     const addRequisiteButton = form.querySelector("[data-add-requisite]");
     const selectDropdownNamespace = window.DistributionStatsPage || {};
-
-    form.addEventListener("input", () => {
-        formChanged = true;
-    });
-    form.addEventListener("change", () => {
-        formChanged = true;
-    });
 
     const escapeHtml = (value) =>
         String(value ?? "")
@@ -294,13 +288,16 @@
         confirmLabel = "Подтвердить",
         tone = "primary",
     }) => {
+        const fallbackMessage = typeof message === "string"
+            ? message
+            : [message?.intro || title, ...(message?.items || []).map((item) => `${item.label}: ${item.count}`)].join("\n");
         if (
             !(confirmModal instanceof HTMLElement) ||
             !(confirmTitleNode instanceof HTMLElement) ||
             !(confirmMessageNode instanceof HTMLElement) ||
             !(confirmSubmitButton instanceof HTMLButtonElement)
         ) {
-            return Promise.resolve(window.confirm(message || title));
+            return Promise.resolve(window.confirm(fallbackMessage || title));
         }
 
         if (confirmResolver) {
@@ -310,7 +307,27 @@
         }
 
         confirmTitleNode.textContent = title;
-        confirmMessageNode.textContent = message;
+        confirmMessageNode.replaceChildren();
+        if (typeof message === "string") {
+            confirmMessageNode.textContent = message;
+        } else if (message && typeof message === "object") {
+            const intro = document.createElement("span");
+            intro.className = "organization-confirm-intro";
+            intro.textContent = message.intro || "";
+            confirmMessageNode.appendChild(intro);
+
+            const items = Array.isArray(message.items) ? message.items : [];
+            if (items.length) {
+                const list = document.createElement("ul");
+                list.className = "organization-confirm-list";
+                items.forEach((item) => {
+                    const listItem = document.createElement("li");
+                    listItem.textContent = `${item.label}: ${item.count}`;
+                    list.appendChild(listItem);
+                });
+                confirmMessageNode.appendChild(list);
+            }
+        }
         confirmSubmitButton.textContent = confirmLabel;
         confirmSubmitButton.classList.add("organization-confirm-submit");
         confirmSubmitButton.classList.toggle("is-danger", tone === "danger");
@@ -871,6 +888,7 @@
                 return;
             }
             const changed = applyDadataDataToForm(result.data);
+            syncFormChangedState();
             window.scrollTo({top: 0, behavior: "smooth"});
             setStatus("");
             const missingSuffix = result.missing_fields?.length
@@ -1194,6 +1212,30 @@
         requisites: gatherRequisites(),
     });
 
+    const syncFormActionButtons = () => {
+        const isBusy = saveButton instanceof HTMLButtonElement && saveButton.dataset.busy === "true";
+        if (saveButton instanceof HTMLButtonElement) {
+            saveButton.disabled = isBusy || !formChanged;
+        }
+        if (rollbackButton instanceof HTMLButtonElement) {
+            rollbackButton.disabled = !formChanged;
+        }
+    };
+
+    const syncFormChangedState = () => {
+        formChanged = JSON.stringify(collectPayload()) !== initialFormSnapshot;
+        syncFormActionButtons();
+    };
+
+    const captureInitialFormState = () => {
+        initialFormSnapshot = JSON.stringify(collectPayload());
+        formChanged = false;
+        syncFormActionButtons();
+    };
+
+    form.addEventListener("input", syncFormChangedState);
+    form.addEventListener("change", syncFormChangedState);
+
     const readErrorMessage = async (response) => {
         try {
             const payload = await response.json();
@@ -1208,6 +1250,37 @@
             return `Ошибка ${response.status}`;
         }
         return `Ошибка ${response.status}`;
+    };
+
+    const fetchDeletionPreview = async () => {
+        const previewUrl = form.dataset.deletionPreviewUrl;
+        if (!previewUrl) {
+            throw new Error("Не настроен предпросмотр удаления организации.");
+        }
+        const response = await fetch(previewUrl);
+        if (!response.ok) {
+            throw new Error(await readErrorMessage(response));
+        }
+        return response.json();
+    };
+
+    const buildDeletionConfirmationMessage = (preview) => {
+        const items = Array.isArray(preview?.items) ? preview.items : [];
+        if (!items.length) {
+            return "Организация будет удалена без возможности восстановления.";
+        }
+        return {
+            intro: "Организация и связанные данные будут удалены без возможности восстановления:",
+            items,
+        };
+    };
+
+    const persistDeletionToast = (message) => {
+        try {
+            window.sessionStorage.setItem("active-organizations:deletion-toast", message);
+        } catch {
+            // A successful deletion must not depend on sessionStorage availability.
+        }
     };
 
     const uploadLogoFile = async (file) => {
@@ -1673,6 +1746,13 @@
     syncStudyFieldOptionsList();
     syncRequisiteTypeSelectOptions();
     syncDocumentEditorFieldsState();
+    captureInitialFormState();
+    const formChangesObserver = new MutationObserver(syncFormChangedState);
+    [contactsTableBody, studyFieldList, requisitesList].forEach((node) => {
+        if (node instanceof HTMLElement) {
+            formChangesObserver.observe(node, {childList: true, subtree: true});
+        }
+    });
 
     saveButton?.addEventListener("click", async () => {
         if (!form.dataset.saveUrl) {
@@ -1687,7 +1767,8 @@
         if (!validateInnRequisites()) {
             return;
         }
-        saveButton.disabled = true;
+        saveButton.dataset.busy = "true";
+        syncFormActionButtons();
         setStatus("");
 
         try {
@@ -1718,17 +1799,14 @@
         } catch (error) {
             setStatus(error instanceof Error ? error.message : "Не удалось сохранить изменения.", "error");
         } finally {
-            saveButton.disabled = false;
+            delete saveButton.dataset.busy;
+            syncFormActionButtons();
         }
     });
 
     dadataLookupButton?.addEventListener("click", runDadataLookup);
     dadataRefreshButton?.addEventListener("click", runDadataRefresh);
     rollbackButton?.addEventListener("click", async () => {
-        if (!formChanged) {
-            window.location.reload();
-            return;
-        }
         const confirmed = await confirmAction({
             title: "Отменить несохранённые изменения?",
             message: "Страница будет загружена заново, а значения вернутся к сохранённым данным.",
@@ -1999,9 +2077,19 @@
             if (!deleteUrl) {
                 return;
             }
+            let preview;
+            try {
+                preview = await fetchDeletionPreview();
+            } catch (error) {
+                setStatus(
+                    error instanceof Error ? error.message : "Не удалось получить состав удаляемых данных.",
+                    "error",
+                );
+                return;
+            }
             const shouldDeleteOrganization = await confirmAction({
                 title: "Удалить организацию",
-                message: "Организация будет удалена без возможности восстановления, если её не блокируют связанные данные.",
+                message: buildDeletionConfirmationMessage(preview),
                 confirmLabel: "Удалить",
                 tone: "danger",
             });
@@ -2017,6 +2105,8 @@
                 if (!response.ok) {
                     throw new Error(await readErrorMessage(response));
                 }
+                const payload = await response.json();
+                persistDeletionToast(payload.message || "Организация и связанные данные удалены.");
                 window.location.assign("/organizations/active");
             } catch (error) {
                 setStatus(error instanceof Error ? error.message : "Не удалось удалить организацию.", "error");

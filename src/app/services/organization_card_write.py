@@ -51,12 +51,6 @@ class OrganizationCardValidationError(OrganizationCardError):
     """Raised when incoming payload is invalid."""
 
 
-class OrganizationDeleteBlockedError(OrganizationCardError):
-    def __init__(self, reasons: list[str]):
-        super().__init__("Удаление организации заблокировано связанными данными.")
-        self.reasons = reasons
-
-
 @dataclass(slots=True)
 class _PreparedContact:
     entity_id: int | None
@@ -1064,73 +1058,143 @@ async def delete_organization_safely(
 ) -> None:
     organization = await _get_organization_for_update(session, organization_id)
     previous_logotype_id = organization.logotype_id
-
-    blocking_checks = [
-        (ContractOrm, "связанные договоры"),
-        (OrganizationDistributionStatistic, "статистика распределения"),
-        (PracticeDistributionOrderBlock, "блоки распределения"),
-        (UniversityAcademicDepartment, "связанные кафедры"),
-    ]
-    blocking_reasons: list[str] = []
-    for model, label in blocking_checks:
-        organization_id_column = getattr(model, "organization_id")
-        count = await session.scalar(
-            select(func.count()).select_from(model).where(organization_id_column == organization_id)
-        )
-        if count:
-            blocking_reasons.append(f"{label}: {count}")
-
-    if blocking_reasons:
-        raise OrganizationDeleteBlockedError(blocking_reasons)
-
     contact_entity_ids = select(OrganizationDetailContactEntity.id).where(
         OrganizationDetailContactEntity.organization_id == organization_id
     )
     local_contact_entity_ids = select(OrganizationDetailContactEntityLocal.id).where(
         OrganizationDetailContactEntityLocal.organization_id == organization_id
     )
+    contract_ids = select(ContractOrm.id).where(ContractOrm.organization_id == organization_id)
 
-    await session.execute(
-        delete(OrganizationDetailContactData).where(
-            OrganizationDetailContactData.entity_id.in_(contact_entity_ids)
+    try:
+        await session.execute(
+            delete(ContractPdfDocument).where(ContractPdfDocument.contract_id.in_(contract_ids))
         )
-    )
-    await session.execute(
-        delete(OrganizationDetailContactEntity).where(
-            OrganizationDetailContactEntity.organization_id == organization_id
+        await session.execute(
+            delete(ContractOrm).where(ContractOrm.organization_id == organization_id)
         )
-    )
-    await session.execute(
-        delete(OrganizationDetailContactDataLocal).where(
-            OrganizationDetailContactDataLocal.entity_id.in_(local_contact_entity_ids)
+        await session.execute(
+            delete(OrganizationDistributionStatistic).where(
+                OrganizationDistributionStatistic.organization_id == organization_id
+            )
         )
-    )
-    await session.execute(
-        delete(OrganizationDetailContactEntityLocal).where(
-            OrganizationDetailContactEntityLocal.organization_id == organization_id
+        await session.execute(
+            delete(PracticeDistributionOrderBlock).where(
+                PracticeDistributionOrderBlock.organization_id == organization_id
+            )
         )
-    )
-    await session.execute(
-        delete(OrganizationDetailLegalInformation).where(
-            OrganizationDetailLegalInformation.organization_id == organization_id
+        await session.execute(
+            delete(UniversityAcademicDepartment).where(
+                UniversityAcademicDepartment.organization_id == organization_id
+            )
         )
-    )
-    await session.execute(
-        delete(OrganizationDetailStudyField).where(
-            OrganizationDetailStudyField.organization_id == organization_id
+        await session.execute(
+            delete(OrganizationDetailContactData).where(
+                OrganizationDetailContactData.entity_id.in_(contact_entity_ids)
+            )
         )
-    )
-    await session.execute(
-        delete(OrganizationPreviousName).where(
-            OrganizationPreviousName.organization_id == organization_id
+        await session.execute(
+            delete(OrganizationDetailContactEntity).where(
+                OrganizationDetailContactEntity.organization_id == organization_id
+            )
         )
-    )
-    await session.delete(organization)
-    await session.flush()
-    await _delete_orphan_logotype(
-        session,
-        logotype_id=previous_logotype_id,
-        skip_organization_id=organization_id,
-    )
-    await session.commit()
+        await session.execute(
+            delete(OrganizationDetailContactDataLocal).where(
+                OrganizationDetailContactDataLocal.entity_id.in_(local_contact_entity_ids)
+            )
+        )
+        await session.execute(
+            delete(OrganizationDetailContactEntityLocal).where(
+                OrganizationDetailContactEntityLocal.organization_id == organization_id
+            )
+        )
+        await session.execute(
+            delete(OrganizationDetailLegalInformation).where(
+                OrganizationDetailLegalInformation.organization_id == organization_id
+            )
+        )
+        await session.execute(
+            delete(OrganizationDetailStudyField).where(
+                OrganizationDetailStudyField.organization_id == organization_id
+            )
+        )
+        await session.execute(
+            delete(OrganizationPreviousName).where(
+                OrganizationPreviousName.organization_id == organization_id
+            )
+        )
+        await session.delete(organization)
+        await session.flush()
+        await _delete_orphan_logotype(
+            session,
+            logotype_id=previous_logotype_id,
+            skip_organization_id=organization_id,
+        )
+        await session.commit()
+    except Exception:
+        await session.rollback()
+        raise
     await invalidate_logotype_cache(logotype_ids=[previous_logotype_id or 0])
+
+
+async def get_organization_deletion_preview(
+    session: AsyncSession,
+    *,
+    organization_id: int,
+) -> list[tuple[str, int]]:
+    await _get_organization_for_update(session, organization_id)
+    contract_ids = select(ContractOrm.id).where(ContractOrm.organization_id == organization_id)
+    preview_specs = [
+        (
+            "PDF-файлы договоров",
+            ContractPdfDocument,
+            ContractPdfDocument.contract_id.in_(contract_ids),
+        ),
+        ("договоры", ContractOrm, ContractOrm.organization_id == organization_id),
+        (
+            "статистика распределения",
+            OrganizationDistributionStatistic,
+            OrganizationDistributionStatistic.organization_id == organization_id,
+        ),
+        (
+            "блоки распределения",
+            PracticeDistributionOrderBlock,
+            PracticeDistributionOrderBlock.organization_id == organization_id,
+        ),
+        (
+            "связанные кафедры",
+            UniversityAcademicDepartment,
+            UniversityAcademicDepartment.organization_id == organization_id,
+        ),
+        (
+            "контакты",
+            OrganizationDetailContactEntity,
+            OrganizationDetailContactEntity.organization_id == organization_id,
+        ),
+        (
+            "локальные контакты",
+            OrganizationDetailContactEntityLocal,
+            OrganizationDetailContactEntityLocal.organization_id == organization_id,
+        ),
+        (
+            "реквизиты",
+            OrganizationDetailLegalInformation,
+            OrganizationDetailLegalInformation.organization_id == organization_id,
+        ),
+        (
+            "направления подготовки",
+            OrganizationDetailStudyField,
+            OrganizationDetailStudyField.organization_id == organization_id,
+        ),
+        (
+            "прежние наименования",
+            OrganizationPreviousName,
+            OrganizationPreviousName.organization_id == organization_id,
+        ),
+    ]
+    result: list[tuple[str, int]] = []
+    for label, model, condition in preview_specs:
+        count = await session.scalar(select(func.count()).select_from(model).where(condition))
+        if count:
+            result.append((label, int(count)))
+    return result

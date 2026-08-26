@@ -17,6 +17,15 @@
     .active-organizations-page .organization-main {
         align-items: flex-start;
     }
+
+    .active-organizations-deletion-notice {
+        margin: 0 0 16px;
+        padding: 12px 16px;
+        border: 1px solid rgba(47, 135, 86, 0.25);
+        border-radius: 12px;
+        background: rgba(47, 135, 86, 0.1);
+        color: #1f6b44;
+    }
 </style>
 {% endblock %}
 
@@ -100,6 +109,7 @@
         data-dadata-job-url-template="{{ request.url_for('dadata_job_status_api', job_id='__JOB_ID__') }}"
     {% endif %}
 >
+    <div class="active-organizations-deletion-notice" data-deletion-notice hidden></div>
     <section class="card" aria-labelledby="filters-heading">
         <div class="card-header card-header-row">
             <div>
