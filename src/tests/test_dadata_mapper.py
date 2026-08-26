@@ -12,6 +12,16 @@ def test_map_party_response_extracts_supported_fields():
                     "inn": "7719402047",
                     "ogrn": "1157746078984",
                     "kpp": "772301001",
+                    "okved": "64.20",
+                    "okved_type": "2014",
+                    "okveds": [
+                        {
+                            "code": "64.20",
+                            "name": "Деятельность холдинговых компаний",
+                            "type": "2014",
+                            "main": True,
+                        }
+                    ],
                     "name": {
                         "full_with_opf": 'ОБЩЕСТВО С ОГРАНИЧЕННОЙ ОТВЕТСТВЕННОСТЬЮ "МОТОРИКА"',
                         "short_with_opf": 'ООО "МОТОРИКА"',
@@ -37,6 +47,9 @@ def test_map_party_response_extracts_supported_fields():
     assert result.inn == "7719402047"
     assert result.ogrn == "1157746078984"
     assert result.kpp == "772301001"
+    assert result.okved == "64.20"
+    assert result.okved_name == "Деятельность холдинговых компаний"
+    assert result.okved_type == "2014"
     assert result.name_short == 'ООО "МОТОРИКА"'
     assert result.chief_name == "Давидюк Андрей Павлович"
     assert result.chief_post == "ГЕНЕРАЛЬНЫЙ ДИРЕКТОР"
@@ -45,6 +58,17 @@ def test_map_party_response_extracts_supported_fields():
     assert result.email == "info@example.test"
     assert result.state_status == "ACTIVE"
     assert missing_fields(result) == ["actual_address"]
+
+
+def test_map_party_response_uses_code_when_primary_name_is_unavailable():
+    result = map_party_response(
+        {"suggestions": [{"data": {"inn": "7719402047", "okved": "72.19"}}]},
+        requested_inn="7719402047",
+    )
+
+    assert result is not None
+    assert result.okved == "72.19"
+    assert result.okved_name is None
 
 
 def test_map_party_response_returns_none_for_empty_suggestions():

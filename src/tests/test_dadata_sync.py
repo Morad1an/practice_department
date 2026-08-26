@@ -62,6 +62,37 @@ def test_missing_dadata_values_do_not_clear_existing_fields():
     assert result.updated_fields == []
 
 
+def test_apply_dadata_upserts_primary_okved_into_existing_requisite():
+    session = AsyncMock()
+    organization = OrganizationOrm(id=1, inn="7719402047")
+    data = DadataOrganizationData(
+        inn="7719402047",
+        okved="64.20",
+        okved_name="Деятельность холдинговых компаний",
+    )
+    with (
+        patch(
+            "src.app.services.dadata.sync._upsert_requisite",
+            new=AsyncMock(return_value=True),
+        ) as upsert_requisite,
+        patch(
+            "src.app.services.dadata.sync._upsert_email_contact",
+            new=AsyncMock(return_value=False),
+        ),
+    ):
+        result = asyncio.run(
+            apply_dadata_to_organization(session, organization=organization, data=data)
+        )
+
+    okved_call = next(
+        call
+        for call in upsert_requisite.await_args_list
+        if call.kwargs["type_names"] == ("ОКВЭД (ОСНОВНОЙ)", "ОКВЭД")
+    )
+    assert okved_call.kwargs["value"] == "64.20 Деятельность холдинговых компаний"
+    assert "okved" in result.updated_fields
+
+
 def test_duplicate_inn_group_uses_one_lookup_and_preserves_card_names():
     session = AsyncMock()
     head_office = OrganizationOrm(id=1, inn="7719402047", name_short="Попка")

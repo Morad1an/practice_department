@@ -275,7 +275,7 @@
                     .map((item) => [item.year, item.value]),
             );
             return `
-                <tr ${row.organization_id ? `data-organization-row data-organization-url="/organizations/${escapeHtml(row.organization_id)}" title="Двойной щелчок откроет карточку организации в новой вкладке"` : ""}>
+                <tr ${row.organization_id ? `data-organization-row data-organization-url="/organizations/${escapeHtml(row.organization_id)}"` : ""}>
                     <td class="contract-number-col">${escapeHtml(row.contract_number || "—")}</td>
                     <td class="signing-date-col">${escapeHtml(row.signing_date || "—")}</td>
                     <td class="logo-cell logo-col">${buildLogoCell(row)}</td>

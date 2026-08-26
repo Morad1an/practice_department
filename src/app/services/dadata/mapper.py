@@ -29,6 +29,29 @@ def _read_email(data: dict) -> str | None:
     return None
 
 
+def _read_primary_okved(data: dict) -> tuple[str | None, str | None, str | None]:
+    raw_code = normalize_text(data.get("okved"))
+    raw_type = normalize_text(data.get("okved_type"))
+    raw_name = normalize_text(data.get("okved_name"))
+    primary: dict | None = None
+    okveds = data.get("okveds")
+    if isinstance(okveds, list):
+        entries = [entry for entry in okveds if isinstance(entry, dict)]
+        primary = next((entry for entry in entries if entry.get("main") is True), None)
+        if primary is None and raw_code:
+            primary = next(
+                (entry for entry in entries if normalize_text(entry.get("code")) == raw_code),
+                None,
+            )
+    if primary is not None:
+        raw_code = normalize_text(primary.get("code")) or raw_code
+        raw_name = normalize_text(primary.get("name")) or raw_name
+        raw_type = normalize_text(primary.get("type")) or raw_type
+    if not raw_code and not raw_name:
+        return None, None, raw_type
+    return raw_code, raw_name, raw_type
+
+
 def map_party_response(payload: dict, *, requested_inn: str) -> DadataOrganizationData | None:
     suggestions = payload.get("suggestions")
     if not isinstance(suggestions, list) or not suggestions:
@@ -54,10 +77,15 @@ def map_party_response(payload: dict, *, requested_inn: str) -> DadataOrganizati
     if legal_address is None:
         legal_address = normalize_text(_read_path(data, ("address", "value")))
 
+    okved, okved_name, okved_type = _read_primary_okved(data)
+
     return DadataOrganizationData(
         inn=inn,
         ogrn=normalize_text(data.get("ogrn")),
         kpp=normalize_text(data.get("kpp")),
+        okved=okved,
+        okved_name=okved_name,
+        okved_type=okved_type,
         name_long=normalize_text(_read_path(data, ("name", "full_with_opf"))),
         name_short=normalize_text(_read_path(data, ("name", "short_with_opf"))),
         chief_name=normalize_text(_read_path(data, ("management", "name"))),
@@ -74,6 +102,7 @@ def missing_fields(data: DadataOrganizationData) -> list[str]:
     fields = [
         "ogrn",
         "kpp",
+        "okved",
         "name_long",
         "name_short",
         "chief_name",

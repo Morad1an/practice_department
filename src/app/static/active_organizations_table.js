@@ -165,11 +165,6 @@
                 }
                 row.dataset.dblclickBound = "1";
                 row.addEventListener("dblclick", (event) => {
-                    const selection = window.getSelection?.();
-                    if (selection && String(selection).trim()) {
-                        return;
-                    }
-
                     const interactiveTarget = event.target instanceof Element
                         ? event.target.closest("button, a, input, textarea, select, label")
                         : null;

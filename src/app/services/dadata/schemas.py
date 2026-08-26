@@ -11,6 +11,9 @@ class DadataOrganizationData(BaseModel):
     inn: str
     ogrn: str | None = None
     kpp: str | None = None
+    okved: str | None = None
+    okved_name: str | None = None
+    okved_type: str | None = None
     name_long: str | None = None
     name_short: str | None = None
     chief_name: str | None = None

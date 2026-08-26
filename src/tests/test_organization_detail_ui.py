@@ -2,6 +2,8 @@ from pathlib import Path
 
 DETAIL_JS = Path(__file__).resolve().parents[1] / "app" / "static" / "organization_detail.js"
 ACTIVE_JS = Path(__file__).resolve().parents[1] / "app" / "static" / "active_organizations.js"
+TABLE_JS = Path(__file__).resolve().parents[1] / "app" / "static" / "active_organizations_table.js"
+STATS_JS = Path(__file__).resolve().parents[1] / "app" / "static" / "distribution_stats.js"
 DETAIL_TEMPLATE = (
     Path(__file__).resolve().parents[1] / "app" / "templates" / "organizations" / "detail.html"
 )
@@ -67,6 +69,39 @@ def test_delete_confirmation_uses_the_server_preview_and_redirect_notification()
     assert "confirmMessageNode.replaceChildren()" in source
     assert "persistDeletionToast(payload.message" in source
     assert 'window.location.assign("/organizations/active")' in source
+
+
+def test_dadata_populates_existing_primary_okved_requisite():
+    source = DETAIL_JS.read_text(encoding="utf-8")
+
+    assert 'ensureRequisiteValue(["ОКВЭД (ОСНОВНОЙ)", "ОКВЭД"], data.okved)' in source
+
+
+def test_organization_rows_open_on_double_click_even_when_text_is_selected():
+    table_source = TABLE_JS.read_text(encoding="utf-8")
+    stats_source = STATS_JS.read_text(encoding="utf-8")
+
+    assert table_source.count('addEventListener("dblclick"') == 1
+    assert 'querySelectorAll("[data-organization-row]")' in table_source
+    assert "window.getSelection" not in table_source
+    assert 'addEventListener("dblclick"' in stats_source
+    assert 'querySelectorAll("[data-organization-row]")' in stats_source
+    assert "window.getSelection" not in stats_source
+    assert 'closest("button, a, input, textarea, select, label")' in table_source
+    assert 'closest("button, a, input, textarea, select, label")' in stats_source
+
+
+def test_organization_rows_do_not_show_double_click_tooltip():
+    template_paths = [
+        Path(__file__).resolve().parents[1] / "app" / "templates" / "organizations" / name
+        for name in ("active.html", "study_directions.html", "groups.html")
+    ]
+    template_sources = [path.read_text(encoding="utf-8") for path in template_paths]
+    stats_source = STATS_JS.read_text(encoding="utf-8")
+
+    tooltip = "Двойной щелчок откроет карточку организации"
+    assert all(tooltip not in source for source in template_sources)
+    assert tooltip not in stats_source
 
 
 def test_document_rows_show_contract_type_and_only_labeled_populated_metadata():

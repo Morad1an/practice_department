@@ -51,6 +51,14 @@ class ApplyResult:
     warnings: list[str]
 
 
+def _format_okved(data: DadataOrganizationData) -> str | None:
+    code = (data.okved or "").strip()
+    name = (data.okved_name or "").strip()
+    if code and name:
+        return f"{code} {name}"
+    return code or name or None
+
+
 def _normalize_label(value: str | None) -> str:
     return (value or "").strip().lower()
 
@@ -325,6 +333,11 @@ async def apply_dadata_to_organization(
         ("ogrn", ("ОГРН",), data.ogrn),
         ("kpp", ("КПП",), data.kpp),
         ("legal_address", ("Юридический адрес",), data.legal_address),
+        (
+            "okved",
+            ("ОКВЭД (ОСНОВНОЙ)", "ОКВЭД"),
+            _format_okved(data),
+        ),
     ]
     for field_name, type_names, value in requisite_specs:
         if await _upsert_requisite(

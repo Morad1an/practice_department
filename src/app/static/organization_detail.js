@@ -785,6 +785,9 @@
         if (ensureRequisiteValue(["Юридический адрес"], data.legal_address)) {
             changed.push("юридический адрес");
         }
+        if (ensureRequisiteValue(["ОКВЭД (ОСНОВНОЙ)", "ОКВЭД"], data.okved)) {
+            changed.push("ОКВЭД (основной)");
+        }
         if (ensureRequisiteValue(["Фактический адрес"], data.actual_address)) {
             changed.push("фактический адрес");
         }
