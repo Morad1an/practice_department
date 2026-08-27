@@ -45,6 +45,17 @@ def test_organization_detail_has_no_user_facing_dadata_text():
     assert "адрес проверки задачи Dadata" not in source
 
 
+def test_organization_website_allows_dash_without_disabling_url_validation():
+    detail_template = DETAIL_TEMPLATE.read_text(encoding="utf-8")
+    detail_source = DETAIL_JS.read_text(encoding="utf-8")
+
+    assert 'type="url"' in detail_template
+    assert 'const websiteInput = form.querySelector(\'input[name="website"]\');' in detail_source
+    assert 'websiteInput.value.trim() === "-"' in detail_source
+    assert 'const targetType = isPlaceholder ? "text" : "url";' in detail_source
+    assert 'websiteInput?.addEventListener("input", syncWebsiteInputType);' in detail_source
+
+
 def test_full_refresh_status_monitor_is_nonblocking_and_survives_page_reload():
     source = ACTIVE_JS.read_text(encoding="utf-8")
 

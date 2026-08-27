@@ -83,6 +83,7 @@
     const requisiteTypeSelect = form.querySelector("[data-requisite-type-select]");
     const requisiteTypeDropdown = requisiteTypeSelect?.closest("[data-select-dropdown]") || null;
     const addRequisiteButton = form.querySelector("[data-add-requisite]");
+    const websiteInput = form.querySelector('input[name="website"]');
     const selectDropdownNamespace = window.DistributionStatsPage || {};
 
     const escapeHtml = (value) =>
@@ -1215,6 +1216,18 @@
         requisites: gatherRequisites(),
     });
 
+    const syncWebsiteInputType = () => {
+        if (!(websiteInput instanceof HTMLInputElement)) {
+            return;
+        }
+        const isPlaceholder = websiteInput.value.trim() === "-";
+        const targetType = isPlaceholder ? "text" : "url";
+        if (websiteInput.type !== targetType) {
+            websiteInput.type = targetType;
+        }
+        websiteInput.setCustomValidity("");
+    };
+
     const syncFormActionButtons = () => {
         const isBusy = saveButton instanceof HTMLButtonElement && saveButton.dataset.busy === "true";
         if (saveButton instanceof HTMLButtonElement) {
@@ -1745,6 +1758,8 @@
     if (typeof selectDropdownNamespace.initSelectDropdowns === "function") {
         selectDropdownNamespace.initSelectDropdowns(form);
     }
+    websiteInput?.addEventListener("input", syncWebsiteInputType);
+    syncWebsiteInputType();
     syncStudyFieldsEmptyState();
     syncStudyFieldOptionsList();
     syncRequisiteTypeSelectOptions();
@@ -1761,6 +1776,7 @@
         if (!form.dataset.saveUrl) {
             return;
         }
+        syncWebsiteInputType();
         if (typeof form.reportValidity === "function" && !form.reportValidity()) {
             return;
         }
