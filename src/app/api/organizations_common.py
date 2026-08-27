@@ -200,8 +200,13 @@ async def build_organization_detail_page_context(
     request: Request,
     organization_id: int,
 ) -> dict | None:
+    can_admin = bool(getattr(request.state, "can_admin", False))
     async with async_session_maker() as session:
-        organization = await fetch_organization_card_page(session, organization_id)
+        organization = await fetch_organization_card_page(
+            session,
+            organization_id,
+            include_leader_contacts=can_admin,
+        )
         contact_type_options = await fetch_contact_type_options(session)
         document_type_options = await fetch_contract_type_options(session)
         requisite_type_options = await fetch_requisite_type_options(session)
@@ -215,7 +220,7 @@ async def build_organization_detail_page_context(
     return {
         "request": request,
         "can_edit": bool(getattr(request.state, "can_edit", False)),
-        "can_admin": bool(getattr(request.state, "can_admin", False)),
+        "can_admin": can_admin,
         "active_tab": None,
         "create_mode": False,
         "organization": organization_payload,

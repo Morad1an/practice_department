@@ -844,7 +844,7 @@
                     <div class="hero-auth-panel">
                         <div class="hero-user-badge hero-auth-slot">
                             <span class="hero-user-name">{{ request.state.current_user.username }}</span>
-                            <span class="hero-user-role">{{ 'Редактор' if request.state.can_edit else 'Просмотр' }}</span>
+                            <span class="hero-user-role">{{ 'Администратор' if request.state.can_admin else ('Редактор' if request.state.can_edit else 'Просмотр') }}</span>
                         </div>
                         <form method="post" action="/logout" class="hero-logout-slot">
                             <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">

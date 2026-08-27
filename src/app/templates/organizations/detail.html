@@ -3,7 +3,7 @@
 {% block title %}{{ page_title }}{% endblock %}
 
 {% block extra_head %}
-{% set organization_detail_assets_version = '20260827-organization-detail-v2' %}
+{% set organization_detail_assets_version = '20260827-organization-detail-v3' %}
 <link rel="stylesheet" href="{{ request.url_for('static', path='active_organizations.css') }}?v={{ organization_detail_assets_version }}">
 <link rel="stylesheet" href="{{ request.url_for('static', path='organization_detail.css') }}?v={{ organization_detail_assets_version }}">
 {% endblock %}
@@ -33,6 +33,7 @@
         data-organization-card-form
         data-create-mode="{{ 'true' if create_mode else 'false' }}"
         data-can-edit="{{ 'true' if can_edit else 'false' }}"
+        data-can-admin="{{ 'true' if can_admin else 'false' }}"
         data-save-url="{% if create_mode %}{{ request.url_for('create_organization_api') }}{% else %}{{ request.url_for('update_organization_api', organization_id=organization.id) }}{% endif %}"
         data-dadata-lookup-url="{{ request.url_for('dadata_party_lookup_api') }}"
         data-dadata-job-url-template="{{ request.url_for('dadata_job_status_api', job_id='__JOB_ID__') }}"
@@ -462,41 +463,48 @@
             {% endif %}
         </section>
 
-        <section class="organization-block organization-collapsible" data-collapsible-section>
+        {% if can_admin %}
+        <section class="organization-block organization-collapsible" data-collapsible-section data-leader-contacts-section>
             <button type="button" class="organization-section-toggle" data-section-toggle aria-expanded="false">
                 <span>Контакты руководителей организации</span>
                 <span class="organization-section-toggle-icon">+</span>
             </button>
             <div class="organization-section-panel" data-section-panel hidden>
-                {% if organization.leader_contacts %}
-                    <div class="organization-table-wrapper">
-                        <table class="organization-data-table">
-                            <thead>
-                            <tr>
-                                <th>Контактное лицо</th>
-                                <th>Тип контакта</th>
-                                <th>Контактные данные</th>
-                            </tr>
-                            </thead>
-                            <tbody>
-                            {% for row in organization.leader_contacts %}
-                                <tr>
-                                    <td>
-                                        <strong>{{ row.contact_name or '—' }}</strong>
-                                        <div class="muted">{{ row.contact_post or '—' }}</div>
-                                    </td>
-                                    <td>{{ row.contact_type or '—' }}</td>
-                                    <td>{{ row.contact_value or '—' }}</td>
-                                </tr>
-                            {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                {% else %}
-                    <div class="organization-placeholder">Контакты руководителей не заполнены.</div>
-                {% endif %}
+                <button type="button" class="btn btn-outline" data-add-leader-contact>Добавить контактное лицо</button>
+                <div class="organization-contact-list" data-leader-contacts-list>
+                    {% for group in organization.leader_contact_groups %}
+                        <div class="organization-contact-card" data-leader-contact-card data-client-entity-key="leader-saved-{{ group.entity_id }}">
+                            <input type="hidden" name="contact_entity_id" value="{{ group.entity_id }}">
+                            <div class="organization-contact-card-header">
+                                <div class="organization-contact-person-fields">
+                                    <input type="text" name="contact_name" value="{{ group.contact_name or '' }}" placeholder="Контактное лицо">
+                                    <input type="text" name="contact_post" value="{{ group.contact_post or '' }}" placeholder="Должность">
+                                </div>
+                                <button type="button" class="btn organization-contact-delete-person" data-remove-leader-contact-card>Удалить контактное лицо</button>
+                            </div>
+                            <div class="organization-contact-methods" data-leader-contact-methods>
+                                {% for row in group.contacts %}
+                                    <div class="organization-contact-method-row" data-leader-contact-method-row>
+                                        <input type="hidden" name="contact_data_id" value="{{ row.data_id or '' }}">
+                                        <select name="contact_type_id">
+                                            <option value="">Выберите тип</option>
+                                            {% for option in contact_type_options %}
+                                                <option value="{{ option.id }}" {% if row.contact_type_id == option.id %}selected{% endif %}>{{ option.label }}</option>
+                                            {% endfor %}
+                                        </select>
+                                        <input type="text" name="contact_value" value="{{ row.contact_value or '' }}" placeholder="Контактные данные">
+                                        <button type="button" class="organization-contact-method-remove" data-remove-leader-contact-row aria-label="Удалить контакт">×</button>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                            <button type="button" class="btn btn-outline organization-contact-add-method" data-add-leader-contact-method>Добавить контактные данные</button>
+                        </div>
+                    {% endfor %}
+                </div>
+                <div class="organization-placeholder" data-empty-leader-contacts-note {% if organization.leader_contact_groups %}hidden{% endif %}>Контакты руководителей не заполнены.</div>
             </div>
         </section>
+        {% endif %}
 
         <section class="organization-block organization-collapsible" data-collapsible-section>
             <button type="button" class="organization-section-toggle" data-section-toggle aria-expanded="true">

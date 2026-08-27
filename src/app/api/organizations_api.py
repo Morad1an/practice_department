@@ -15,7 +15,7 @@ from fastapi import (
 )
 from fastapi.responses import HTMLResponse, Response
 
-from src.app.api.auth_dependencies import require_editor_user
+from src.app.api.auth_dependencies import require_admin_user, require_editor_user
 from src.app.api.organizations_common import (
     build_active_organizations_page_context,
     build_group_distribution_page_context,
@@ -42,6 +42,7 @@ from src.app.schemas.organizations import (
     OrganizationDocumentCreatePayload,
     OrganizationDocumentUpdatePayload,
     OrganizationHeaderSearchResponse,
+    OrganizationLeaderContactsSavePayload,
     StudyDirectionsFilterOptions,
     StudyDirectionsFilters,
     StudyDirectionsTableRequest,
@@ -71,6 +72,7 @@ from src.app.services.organization_card_write import (
     delete_organization_safely,
     get_organization_deletion_preview,
     get_organization_document_pdf,
+    save_leader_contacts,
     save_organization_card,
     save_organization_logo,
     update_organization_document,
@@ -502,6 +504,34 @@ async def update_organization(
     return OrganizationCardSaveResult(
         organization_id=saved_organization_id,
         message="Изменения сохранены.",
+    )
+
+
+@router.put(
+    "/api/organizations/{organization_id}/leader-contacts",
+    response_model=OrganizationCardSaveResult,
+    name="update_organization_leader_contacts_api",
+)
+async def update_organization_leader_contacts(
+    organization_id: int,
+    payload: OrganizationLeaderContactsSavePayload,
+    _: object = Depends(require_admin_user),
+):
+    async with async_session_maker() as session:
+        try:
+            await save_leader_contacts(
+                session,
+                organization_id=organization_id,
+                payload=payload,
+            )
+            await session.commit()
+        except Exception as error:  # pragma: no cover - normalized below
+            await session.rollback()
+            _raise_card_api_error(error)
+
+    return OrganizationCardSaveResult(
+        organization_id=organization_id,
+        message="Контакты руководителей сохранены.",
     )
 
 

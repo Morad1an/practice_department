@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from typing import Any
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -34,6 +35,7 @@ from src.app.schemas.organizations import (
     OrganizationCardSavePayload,
     OrganizationDocumentCreatePayload,
     OrganizationDocumentUpdatePayload,
+    OrganizationLeaderContactsSavePayload,
 )
 from src.app.services.logotype_utils import build_logo_preview_bytes, detect_logo_mime
 from src.app.services.logotypes_batch import cache_logotype_data, invalidate_logotype_cache
@@ -453,6 +455,8 @@ async def _sync_contacts(
     *,
     organization_id: int,
     contacts: list[OrganizationCardContactInput],
+    entity_model=OrganizationDetailContactEntity,
+    data_model=OrganizationDetailContactData,
 ) -> None:
     valid_contact_type_ids = await _load_contact_type_ids(session)
     prepared_contacts = _prepare_contacts(contacts)
@@ -466,9 +470,7 @@ async def _sync_contacts(
         entity.id: entity
         for entity in (
             await session.execute(
-                select(OrganizationDetailContactEntity).where(
-                    OrganizationDetailContactEntity.organization_id == organization_id
-                )
+                select(entity_model).where(entity_model.organization_id == organization_id)
             )
         ).scalars()
     }
@@ -476,21 +478,21 @@ async def _sync_contacts(
         row.id: row
         for row in (
             await session.execute(
-                select(OrganizationDetailContactData)
+                select(data_model)
                 .join(
-                    OrganizationDetailContactEntity,
-                    OrganizationDetailContactEntity.id == OrganizationDetailContactData.entity_id,
+                    entity_model,
+                    entity_model.id == data_model.entity_id,
                 )
-                .where(OrganizationDetailContactEntity.organization_id == organization_id)
+                .where(entity_model.organization_id == organization_id)
             )
         ).scalars()
     }
 
     retained_data_ids: set[int] = set()
-    created_entities_by_client_key: dict[str, OrganizationDetailContactEntity] = {}
+    created_entities_by_client_key: dict[str, Any] = {}
 
     for contact in prepared_contacts:
-        entity: OrganizationDetailContactEntity | None
+        entity: Any
         if contact.data_id is not None:
             data_row = existing_data_rows.get(contact.data_id)
             if data_row is None:
@@ -512,18 +514,18 @@ async def _sync_contacts(
             elif contact.client_entity_key:
                 entity = created_entities_by_client_key.get(contact.client_entity_key)
                 if entity is None:
-                    entity = OrganizationDetailContactEntity(organization_id=organization_id)
+                    entity = entity_model(organization_id=organization_id)
                     session.add(entity)
                     await session.flush()
                     existing_entities[entity.id] = entity
                     created_entities_by_client_key[contact.client_entity_key] = entity
             else:
-                entity = OrganizationDetailContactEntity(organization_id=organization_id)
+                entity = entity_model(organization_id=organization_id)
                 session.add(entity)
                 await session.flush()
                 existing_entities[entity.id] = entity
 
-            data_row = OrganizationDetailContactData(
+            data_row = data_model(
                 entity_id=entity.id,
                 type_id=contact.contact_type_id,
                 data=contact.contact_value,
@@ -547,17 +549,35 @@ async def _sync_contacts(
 
     orphan_entities = (
         await session.execute(
-            select(OrganizationDetailContactEntity)
+            select(entity_model)
             .outerjoin(
-                OrganizationDetailContactData,
-                OrganizationDetailContactData.entity_id == OrganizationDetailContactEntity.id,
+                data_model,
+                data_model.entity_id == entity_model.id,
             )
-            .where(OrganizationDetailContactEntity.organization_id == organization_id)
-            .where(OrganizationDetailContactData.id.is_(None))
+            .where(entity_model.organization_id == organization_id)
+            .where(data_model.id.is_(None))
         )
     ).scalars()
     for entity in orphan_entities:
         await session.delete(entity)
+
+
+async def save_leader_contacts(
+    session: AsyncSession,
+    *,
+    organization_id: int,
+    payload: OrganizationLeaderContactsSavePayload,
+) -> None:
+    organization = await _get_organization_for_update(session, organization_id)
+    if organization is None:
+        raise OrganizationCardNotFoundError("Организация не найдена.")
+    await _sync_contacts(
+        session,
+        organization_id=organization_id,
+        contacts=payload.contacts,
+        entity_model=OrganizationDetailContactEntityLocal,
+        data_model=OrganizationDetailContactDataLocal,
+    )
 
 
 async def _sync_requisites(

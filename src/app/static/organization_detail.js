@@ -7,6 +7,10 @@
     const contactsTableBody = form.querySelector("[data-contacts-list], [data-contacts-table-body]");
     const addContactButton = form.querySelector("[data-add-contact]");
     const emptyContactsNote = form.querySelector("[data-empty-contacts-note]");
+    const leaderContactsTableBody = form.querySelector("[data-leader-contacts-list]");
+    const addLeaderContactButton = form.querySelector("[data-add-leader-contact]");
+    const emptyLeaderContactsNote = form.querySelector("[data-empty-leader-contacts-note]");
+    const canAdmin = form.dataset.canAdmin === "true";
     const mapButton = form.querySelector("[data-show-on-map]");
     const saveButton = form.querySelector("[data-save-organization]");
     const deleteButton = form.querySelector("[data-delete-organization]");
@@ -51,6 +55,7 @@
     let documentModalState = null;
     let formChanged = false;
     let initialFormSnapshot = "";
+    let initialLeaderContactsSnapshot = "";
     let contactClientKeyCounter = 0;
     const contactTypeOptions = (() => {
         try {
@@ -359,6 +364,13 @@
         emptyContactsNote.hidden = contactsTableBody.querySelectorAll("[data-contact-card]").length > 0;
     };
 
+    const syncLeaderContactsEmptyState = () => {
+        if (!(leaderContactsTableBody instanceof HTMLElement) || !(emptyLeaderContactsNote instanceof HTMLElement)) {
+            return;
+        }
+        emptyLeaderContactsNote.hidden = leaderContactsTableBody.querySelectorAll("[data-leader-contact-card]").length > 0;
+    };
+
     const buildContactTypeOptionsMarkup = (selectedId = "") => {
         const normalizedSelectedId = String(selectedId || "");
         const options = ['<option value="">Выберите тип</option>'];
@@ -381,17 +393,18 @@
         dataId = "",
         typeId = "",
         value = "",
+        leader = false,
     } = {}) => {
         const row = document.createElement("div");
         row.className = "organization-contact-method-row";
-        row.setAttribute("data-contact-method-row", "");
+        row.setAttribute(leader ? "data-leader-contact-method-row" : "data-contact-method-row", "");
         row.innerHTML = `
             <input type="hidden" name="contact_data_id" value="${escapeHtml(dataId)}">
             <select name="contact_type_id">
                 ${buildContactTypeOptionsMarkup(typeId)}
             </select>
             <input type="text" name="contact_value" value="${escapeHtml(value)}" placeholder="Контактные данные">
-            <button type="button" class="organization-contact-method-remove" data-remove-contact-row aria-label="Удалить контакт">×</button>
+            <button type="button" class="organization-contact-method-remove" ${leader ? "data-remove-leader-contact-row" : "data-remove-contact-row"} aria-label="Удалить контакт">×</button>
         `;
         return row;
     };
@@ -402,10 +415,11 @@
         name = "",
         post = "",
         methods = [{}],
+        leader = false,
     } = {}) => {
         const card = document.createElement("div");
         card.className = "organization-contact-card";
-        card.setAttribute("data-contact-card", "");
+        card.setAttribute(leader ? "data-leader-contact-card" : "data-contact-card", "");
         card.dataset.clientEntityKey = clientEntityKey || nextContactClientKey();
         card.innerHTML = `
             <input type="hidden" name="contact_entity_id" value="${escapeHtml(entityId)}">
@@ -414,15 +428,15 @@
                     <input type="text" name="contact_name" value="${escapeHtml(name)}" placeholder="Контактное лицо">
                     <input type="text" name="contact_post" value="${escapeHtml(post)}" placeholder="Должность">
                 </div>
-                <button type="button" class="btn organization-contact-delete-person" data-remove-contact-card>Удалить контактное лицо</button>
+                <button type="button" class="btn organization-contact-delete-person" ${leader ? "data-remove-leader-contact-card" : "data-remove-contact-card"}>Удалить контактное лицо</button>
             </div>
-            <div class="organization-contact-methods" data-contact-methods></div>
-            <button type="button" class="btn btn-outline organization-contact-add-method" data-add-contact-method>Добавить контактные данные</button>
+            <div class="organization-contact-methods" ${leader ? "data-leader-contact-methods" : "data-contact-methods"}></div>
+            <button type="button" class="btn btn-outline organization-contact-add-method" ${leader ? "data-add-leader-contact-method" : "data-add-contact-method"}>Добавить контактные данные</button>
         `;
         const methodsContainer = card.querySelector("[data-contact-methods]");
         if (methodsContainer instanceof HTMLElement) {
             methods.forEach((method) => {
-                methodsContainer.appendChild(buildContactMethodRow(method));
+                methodsContainer.appendChild(buildContactMethodRow({...method, leader}));
             });
         }
         return card;
@@ -1193,13 +1207,13 @@
         return true;
     };
 
-    const gatherContacts = () => {
-        if (!(contactsTableBody instanceof HTMLElement)) {
+    const gatherContactsFrom = (contactsRoot, cardSelector, methodSelector) => {
+        if (!(contactsRoot instanceof HTMLElement)) {
             return [];
         }
 
         const rows = [];
-        contactsTableBody.querySelectorAll("[data-contact-card]").forEach((card) => {
+        contactsRoot.querySelectorAll(cardSelector).forEach((card) => {
             if (!(card instanceof HTMLElement)) {
                 return;
             }
@@ -1207,7 +1221,7 @@
             const clientEntityKey = card.dataset.clientEntityKey || null;
             const name = card.querySelector('input[name="contact_name"]')?.value?.trim() || "";
             const post = card.querySelector('input[name="contact_post"]')?.value?.trim() || "";
-            card.querySelectorAll("[data-contact-method-row]").forEach((methodRow) => {
+            card.querySelectorAll(methodSelector).forEach((methodRow) => {
                 if (!(methodRow instanceof HTMLElement)) {
                     return;
                 }
@@ -1237,6 +1251,18 @@
         });
         return rows;
     };
+
+    const gatherContacts = () => gatherContactsFrom(
+        contactsTableBody,
+        "[data-contact-card]",
+        "[data-contact-method-row]",
+    );
+
+    const gatherLeaderContacts = () => gatherContactsFrom(
+        leaderContactsTableBody,
+        "[data-leader-contact-card]",
+        "[data-leader-contact-method-row]",
+    );
 
     const gatherStudyFieldIds = () => Array.from(getSelectedStudyFieldIds());
 
@@ -1300,12 +1326,14 @@
     };
 
     const syncFormChangedState = () => {
-        formChanged = JSON.stringify(collectPayload()) !== initialFormSnapshot;
+        formChanged = JSON.stringify(collectPayload()) !== initialFormSnapshot
+            || JSON.stringify(gatherLeaderContacts()) !== initialLeaderContactsSnapshot;
         syncFormActionButtons();
     };
 
     const captureInitialFormState = () => {
         initialFormSnapshot = JSON.stringify(collectPayload());
+        initialLeaderContactsSnapshot = JSON.stringify(gatherLeaderContacts());
         formChanged = false;
         syncFormActionButtons();
     };
@@ -1688,6 +1716,61 @@
         row?.remove();
     });
 
+    addLeaderContactButton?.addEventListener("click", () => {
+        if (!(leaderContactsTableBody instanceof HTMLElement) || !canAdmin) {
+            return;
+        }
+        const card = buildContactCard({leader: true});
+        leaderContactsTableBody.appendChild(card);
+        syncLeaderContactsEmptyState();
+        card.querySelector('input[name="contact_name"]')?.focus();
+    });
+
+    leaderContactsTableBody?.addEventListener("click", async (event) => {
+        const target = event.target;
+        if (!(target instanceof Element) || !canAdmin) {
+            return;
+        }
+        const addMethodButton = target.closest("[data-add-leader-contact-method]");
+        if (addMethodButton) {
+            const card = addMethodButton.closest("[data-leader-contact-card]");
+            const methods = card?.querySelector("[data-leader-contact-methods]");
+            if (methods instanceof HTMLElement) {
+                const row = buildContactMethodRow({leader: true});
+                methods.appendChild(row);
+                row.querySelector("select")?.focus();
+            }
+            return;
+        }
+        const removeCardButton = target.closest("[data-remove-leader-contact-card]");
+        if (removeCardButton) {
+            const shouldRemove = await confirmAction({
+                title: "Удалить контакт руководителя?",
+                message: "Контакт руководителя будет удалён после сохранения изменений.",
+                confirmLabel: "Удалить",
+                tone: "danger",
+            });
+            if (shouldRemove) {
+                removeCardButton.closest("[data-leader-contact-card]")?.remove();
+                syncLeaderContactsEmptyState();
+            }
+            return;
+        }
+        const removeButton = target.closest("[data-remove-leader-contact-row]");
+        if (!removeButton) {
+            return;
+        }
+        const shouldRemove = await confirmAction({
+            title: "Удалить поле контакта?",
+            message: "Поле контакта руководителя будет удалено после сохранения изменений.",
+            confirmLabel: "Удалить",
+            tone: "danger",
+        });
+        if (shouldRemove) {
+            removeButton.closest("[data-leader-contact-method-row]")?.remove();
+        }
+    });
+
     addStudyFieldButton?.addEventListener("click", () => {
         addStudyFieldFromSearch();
     });
@@ -1847,11 +1930,25 @@
     syncDocumentEditorFieldsState();
     captureInitialFormState();
     const formChangesObserver = new MutationObserver(syncFormChangedState);
-    [contactsTableBody, studyFieldList, requisitesList].forEach((node) => {
+    [contactsTableBody, leaderContactsTableBody, studyFieldList, requisitesList].forEach((node) => {
         if (node instanceof HTMLElement) {
             formChangesObserver.observe(node, {childList: true, subtree: true});
         }
     });
+
+    const saveLeaderContacts = async (organizationId) => {
+        if (!canAdmin || !(leaderContactsTableBody instanceof HTMLElement) || !organizationId) {
+            return;
+        }
+        const response = await fetch(`/api/organizations/${encodeURIComponent(organizationId)}/leader-contacts`, {
+            method: "PUT",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({contacts: gatherLeaderContacts()}),
+        });
+        if (!response.ok) {
+            throw new Error(await readErrorMessage(response));
+        }
+    };
 
     saveButton?.addEventListener("click", async () => {
         if (!form.dataset.saveUrl) {
@@ -1885,6 +1982,7 @@
             }
 
             const payload = await response.json();
+            await saveLeaderContacts(payload.organization_id);
             const successMessage = payload.message || "Изменения сохранены.";
             setStatus("");
 

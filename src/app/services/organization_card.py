@@ -344,6 +344,8 @@ async def _fetch_requisites(
 async def fetch_organization_card_page(
     session: AsyncSession,
     organization_id: int,
+    *,
+    include_leader_contacts: bool = False,
 ) -> OrganizationCardPage | None:
     result = await session.execute(
         select(
@@ -373,12 +375,14 @@ async def fetch_organization_card_page(
     logo_data_url = await _fetch_logo_data_url(session, organization.logotype_id)
     study_fields = await _fetch_study_fields(session, organization_id)
     documents, document_groups = await _fetch_documents(session, organization_id)
-    leader_contacts = await _fetch_contact_rows(
-        session,
-        entity_model=OrganizationDetailContactEntityLocal,
-        data_model=OrganizationDetailContactDataLocal,
-        organization_id=organization_id,
-    )
+    leader_contacts = []
+    if include_leader_contacts:
+        leader_contacts = await _fetch_contact_rows(
+            session,
+            entity_model=OrganizationDetailContactEntityLocal,
+            data_model=OrganizationDetailContactDataLocal,
+            organization_id=organization_id,
+        )
     organization_contacts = await _fetch_contact_rows(
         session,
         entity_model=OrganizationDetailContactEntity,
@@ -386,6 +390,7 @@ async def fetch_organization_card_page(
         organization_id=organization_id,
     )
     organization_contact_groups = _group_contact_rows(organization_contacts)
+    leader_contact_groups = _group_contact_rows(leader_contacts)
     requisites = await _fetch_requisites(session, organization_id)
     map_query = _extract_map_query(requisites, organization.settlement_name)
 
@@ -406,6 +411,7 @@ async def fetch_organization_card_page(
         documents=documents,
         document_groups=document_groups,
         leader_contacts=leader_contacts,
+        leader_contact_groups=leader_contact_groups,
         organization_contacts=organization_contacts,
         organization_contact_groups=organization_contact_groups,
         requisites=requisites,

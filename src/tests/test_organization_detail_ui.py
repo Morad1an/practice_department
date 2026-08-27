@@ -50,23 +50,47 @@ def test_organization_website_allows_dash_without_disabling_url_validation():
     detail_source = DETAIL_JS.read_text(encoding="utf-8")
 
     assert 'type="url"' in detail_template
-    assert 'const websiteInput = form.querySelector(\'input[name="website"]\');' in detail_source
+    assert "const websiteInput = form.querySelector('input[name=\"website\"]');" in detail_source
     assert 'websiteInput.value.trim() === "-"' in detail_source
     assert 'const targetType = isPlaceholder ? "text" : "url";' in detail_source
     assert 'websiteInput?.addEventListener("input", syncWebsiteInputType);' in detail_source
+
+
+def test_leader_contacts_are_admin_only_and_saved_through_admin_endpoint():
+    detail_template = DETAIL_TEMPLATE.read_text(encoding="utf-8")
+    detail_source = DETAIL_JS.read_text(encoding="utf-8")
+    common_source = (
+        Path(__file__).resolve().parents[1] / "app" / "api" / "organizations_common.py"
+    ).read_text(encoding="utf-8")
+    api_source = (
+        Path(__file__).resolve().parents[1] / "app" / "api" / "organizations_api.py"
+    ).read_text(encoding="utf-8")
+
+    assert "{% if can_admin %}" in detail_template
+    assert "data-can-admin=" in detail_template
+    assert "Администратор" in BASE_TEMPLATE.read_text(encoding="utf-8")
+    assert "data-leader-contacts-list" in detail_template
+    assert "data-leader-contact-card" in detail_template
+    assert detail_template.index(
+        "data-add-leader-contact>Добавить контактное лицо"
+    ) < detail_template.index("data-leader-contacts-list")
+    assert 'const canAdmin = form.dataset.canAdmin === "true";' in detail_source
+    assert "leader-contacts" in detail_source
+    assert "include_leader_contacts=can_admin" in common_source
+    assert "Depends(require_admin_user)" in api_source
 
 
 def test_settlement_uses_custom_suggestions_while_allowing_free_text():
     detail_template = DETAIL_TEMPLATE.read_text(encoding="utf-8")
     detail_source = DETAIL_JS.read_text(encoding="utf-8")
 
-    assert 'data-settlement-options-json' in detail_template
-    assert 'data-settlement-suggestions' in detail_template
-    assert 'data-settlement-suggestions-list' in detail_template
-    assert 'const filterSettlementOptions = (query) =>' in detail_source
-    assert 'return options;\n        }\n        return options' in detail_source
-    assert 'const filterAvailableStudyFieldOptions = (query) =>' in detail_source
-    assert 'return available;\n        }\n        return available' in detail_source
+    assert "data-settlement-options-json" in detail_template
+    assert "data-settlement-suggestions" in detail_template
+    assert "data-settlement-suggestions-list" in detail_template
+    assert "const filterSettlementOptions = (query) =>" in detail_source
+    assert "return options;\n        }\n        return options" in detail_source
+    assert "const filterAvailableStudyFieldOptions = (query) =>" in detail_source
+    assert "return available;\n        }\n        return available" in detail_source
     assert 'settlementInput?.addEventListener("focus"' in detail_source
     assert 'settlementInput?.addEventListener("input"' in detail_source
     assert 'settlementInput.value = option.label || "";' in detail_source
@@ -110,10 +134,7 @@ def test_dadata_populates_existing_primary_okved_requisite():
 
 def test_requisite_dropdown_refreshes_when_the_dropdown_itself_is_passed():
     shared_source = (
-        Path(__file__).resolve().parents[1]
-        / "app"
-        / "static"
-        / "distribution_stats_shared.js"
+        Path(__file__).resolve().parents[1] / "app" / "static" / "distribution_stats_shared.js"
     ).read_text(encoding="utf-8")
 
     assert 'scope.matches?.("[data-select-dropdown]")' in shared_source

@@ -398,6 +398,7 @@ class OrganizationCardPage(BaseModel):
     documents: list[OrganizationCardDocument] = Field(default_factory=list)
     document_groups: list[OrganizationCardDocumentGroup] = Field(default_factory=list)
     leader_contacts: list[OrganizationCardContactRow] = Field(default_factory=list)
+    leader_contact_groups: list[OrganizationCardContactGroup] = Field(default_factory=list)
     organization_contacts: list[OrganizationCardContactRow] = Field(default_factory=list)
     organization_contact_groups: list[OrganizationCardContactGroup] = Field(default_factory=list)
     requisites: list[OrganizationCardRequisite] = Field(default_factory=list)
@@ -413,6 +414,12 @@ class OrganizationCardContactInput(BaseModel):
     contact_post: str | None = None
     contact_type_id: int | None = None
     contact_value: str | None = None
+
+
+class OrganizationLeaderContactsSavePayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    contacts: list[OrganizationCardContactInput] = Field(default_factory=list)
 
 
 class OrganizationCardRequisiteInput(BaseModel):
