@@ -56,6 +56,7 @@
     let formChanged = false;
     let initialFormSnapshot = "";
     let initialLeaderContactsSnapshot = "";
+    let initialDomSnapshot = null;
     let contactClientKeyCounter = 0;
     const contactTypeOptions = (() => {
         try {
@@ -1331,9 +1332,88 @@
         syncFormActionButtons();
     };
 
+    const buildDomSnapshot = () => {
+        const dynamicRoots = [
+            contactsTableBody,
+            leaderContactsTableBody,
+            studyFieldList,
+            requisitesList,
+        ].filter((node) => node instanceof HTMLElement);
+        const dynamicRootSet = new Set(dynamicRoots);
+        const fields = [];
+        form.querySelectorAll("input, textarea, select").forEach((field) => {
+            if (!(field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement || field instanceof HTMLSelectElement)) {
+                return;
+            }
+            if (Array.from(dynamicRootSet).some((root) => root.contains(field))) {
+                return;
+            }
+            fields.push({
+                name: field.name,
+                type: field instanceof HTMLInputElement ? field.type : field.tagName,
+                value: field.value,
+                checked: field instanceof HTMLInputElement ? field.checked : undefined,
+            });
+        });
+        return {
+            fields,
+            dynamicHtml: dynamicRoots.map((root) => ({root, html: root.innerHTML})),
+            sections: Array.from(form.querySelectorAll("[data-collapsible-section]")).map((section) => ({
+                section,
+                expanded: section.querySelector("[data-section-toggle]")?.getAttribute("aria-expanded") === "true",
+            })),
+        };
+    };
+
+    const restoreDomSnapshot = () => {
+        if (!initialDomSnapshot) {
+            return;
+        }
+        initialDomSnapshot.dynamicHtml.forEach(({root, html}) => {
+            if (root instanceof HTMLElement) {
+                root.innerHTML = html;
+            }
+        });
+        const fields = form.querySelectorAll("input, textarea, select");
+        let fieldIndex = 0;
+        fields.forEach((field) => {
+            if (!(field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement || field instanceof HTMLSelectElement)) {
+                return;
+            }
+            if ([contactsTableBody, leaderContactsTableBody, studyFieldList, requisitesList]
+                .filter((node) => node instanceof HTMLElement)
+                .some((root) => root.contains(field))) {
+                return;
+            }
+            const snapshotField = initialDomSnapshot.fields[fieldIndex];
+            fieldIndex += 1;
+            if (!snapshotField) {
+                return;
+            }
+            field.value = snapshotField.value;
+            if (field instanceof HTMLInputElement && snapshotField.checked !== undefined) {
+                field.checked = snapshotField.checked;
+            }
+        });
+        initialDomSnapshot.sections.forEach(({section, expanded}) => {
+            const toggle = section.querySelector("[data-section-toggle]");
+            if (toggle instanceof HTMLElement) {
+                toggle.setAttribute("aria-expanded", String(expanded));
+                syncCollapsibleSection(section);
+            }
+        });
+        syncContactsEmptyState();
+        syncLeaderContactsEmptyState();
+        syncStudyFieldsEmptyState();
+        syncStudyFieldOptionsList();
+        syncRequisiteTypeSelectOptions();
+        updateMapButtonState();
+    };
+
     const captureInitialFormState = () => {
         initialFormSnapshot = JSON.stringify(collectPayload());
         initialLeaderContactsSnapshot = JSON.stringify(gatherLeaderContacts());
+        initialDomSnapshot = buildDomSnapshot();
         formChanged = false;
         syncFormActionButtons();
     };
@@ -1988,11 +2068,13 @@
 
             if (payload.redirect_url) {
                 persistToastForRedirect(successMessage, "success");
+                window.scrollTo({top: 0, behavior: "smooth"});
                 window.location.assign(payload.redirect_url);
                 return;
             }
-            persistToastForRedirect(successMessage, "success");
-            window.location.reload();
+            captureInitialFormState();
+            window.scrollTo({top: 0, behavior: "smooth"});
+            showToast(successMessage, "success");
             return;
         } catch (error) {
             setStatus(error instanceof Error ? error.message : "Не удалось сохранить изменения.", "error");
@@ -2011,7 +2093,10 @@
             confirmLabel: "Отменить изменения",
         });
         if (confirmed) {
-            window.location.reload();
+            restoreDomSnapshot();
+            syncFormChangedState();
+            window.scrollTo({top: 0, behavior: "smooth"});
+            showToast("Несохранённые изменения отменены.", "info");
         }
     });
 
