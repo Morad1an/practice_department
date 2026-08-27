@@ -3,7 +3,7 @@
 {% block title %}Направления подготовки{% endblock %}
 
 {% block extra_head %}
-{% set study_directions_assets_version = '20260605-study-directions-v4' %}
+{% set study_directions_assets_version = '20260827-study-directions-v9' %}
 <link rel="stylesheet" href="{{ request.url_for('static', path='active_organizations.css') }}?v={{ study_directions_assets_version }}">
 <style>
     .study-directions-page .filter-menu {
@@ -20,7 +20,7 @@
     }
 
     .study-directions-page .faculty-col {
-        width: 88px;
+        width: 112px;
     }
 
     .study-directions-page .department-col {
@@ -28,27 +28,83 @@
     }
 
     .study-directions-page .study-direction-name-col {
-        width: 170px;
+        width: 270px;
     }
 
     .study-directions-page .study-direction-code-col {
-        width: 116px;
+        width: 200px;
     }
 
     .study-directions-page .logo-col {
-        width: 88px;
+        width: 90px;
     }
 
     .study-directions-page .organization-col {
-        width: 220px;
+        width: 280px;
     }
 
     .study-directions-page .phone-col {
-        width: 260px;
+        width: 320px;
     }
 
     .study-directions-page .digital-col {
-        width: 220px;
+        width: 300px;
+    }
+
+    .study-directions-page .data-table {
+        min-width: 1600px;
+    }
+
+    .study-directions-floating-x-scroll {
+        position: fixed;
+        left: 50%;
+        right: auto;
+        width: min(900px, calc(100vw - 160px));
+        bottom: 18px;
+        z-index: 9;
+        overflow-x: auto;
+        overflow-y: hidden;
+        height: 18px;
+        padding-top: 2px;
+        border: 1px solid #9ca3af;
+        border-radius: 999px;
+        background: #cbd5e1;
+        box-shadow: 0 12px 30px rgba(15, 23, 42, 0.16);
+        backdrop-filter: blur(10px);
+        scrollbar-color: #6b7280 #cbd5e1;
+        scrollbar-width: auto;
+        transform: translateX(-50%);
+    }
+
+    .study-directions-floating-x-scroll + .scroll-top {
+        bottom: 42px;
+    }
+
+    .study-directions-floating-x-scroll::-webkit-scrollbar {
+        height: 12px;
+    }
+
+    .study-directions-floating-x-scroll::-webkit-scrollbar-track {
+        border-radius: 999px;
+        background: #cbd5e1;
+    }
+
+    .study-directions-floating-x-scroll::-webkit-scrollbar-thumb {
+        border: 2px solid #6b7280;
+        border-radius: 999px;
+        background: #4b5563;
+    }
+
+    .study-directions-floating-x-scroll::-webkit-scrollbar-thumb:hover {
+        background: #374151;
+    }
+
+    .study-directions-floating-x-scroll[hidden] {
+        display: none;
+    }
+
+    .study-directions-floating-x-scroll-inner {
+        height: 1px;
     }
 
     .study-directions-page .data-table th.phone-col,
@@ -57,13 +113,14 @@
     }
 
     .study-directions-page .data-table td.organization-col {
-        font-size: 0.92rem;
-        color: var(--text-soft);
+        font-size: inherit;
+        color: var(--text-main);
+        font-weight: 400;
     }
 
     .study-directions-page .data-table td.organization-col .organization-name {
         font-size: inherit;
-        font-weight: 500;
+        font-weight: 400;
         color: inherit;
     }
 
@@ -79,6 +136,10 @@
     }
 
     @media (max-width: 768px) {
+        .study-directions-floating-x-scroll {
+            width: calc(100vw - 48px);
+        }
+
         .study-directions-page .filter-menu {
             width: 100%;
             max-width: 100%;
@@ -392,6 +453,10 @@
 <script id="study-directions-bootstrap" type="application/json">
     {{ bootstrap_state | tojson }}
 </script>
+
+<div class="study-directions-floating-x-scroll" data-floating-x-scroll hidden aria-hidden="true">
+    <div class="study-directions-floating-x-scroll-inner" data-floating-x-scroll-inner></div>
+</div>
 
 <button type="button" class="scroll-top" data-scroll-top aria-label="Вернуться к началу">↑ Наверх</button>
 {% endblock %}

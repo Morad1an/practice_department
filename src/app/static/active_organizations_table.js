@@ -191,6 +191,8 @@
 
         const refreshTable = async ({historyMode = "replace"} = {}) => {
             const requestId = ++tableRequestId;
+            const currentTableScroll = getTableSection()?.querySelector(".table-scroll");
+            const previousHorizontalScrollLeft = currentTableScroll?.scrollLeft ?? null;
             setTableBusy(true);
             try {
                 const freshSection = await requestTableSection(0);
@@ -198,6 +200,11 @@
                     return;
                 }
                 replaceTable(freshSection);
+                const nextTableScroll = getTableSection()?.querySelector(".table-scroll");
+                if (nextTableScroll && previousHorizontalScrollLeft !== null) {
+                    nextTableScroll.scrollLeft = previousHorizontalScrollLeft;
+                    nextTableScroll.dispatchEvent(new Event("scroll"));
+                }
                 persistState();
                 updateHistory(historyMode);
                 handleScrollButton();

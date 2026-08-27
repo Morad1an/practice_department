@@ -474,6 +474,7 @@
 
         .data-table {
             width: 100%;
+            table-layout: fixed;
             border-collapse: separate;
             border-spacing: 0;
             margin-top: 28px;
@@ -488,6 +489,7 @@
             padding: 16px 18px;
             border-bottom: 1px solid var(--border);
             vertical-align: top;
+            overflow-wrap: anywhere;
         }
 
         .data-table th {
@@ -498,6 +500,8 @@
             text-transform: uppercase;
             letter-spacing: 0.08em;
             color: rgb(255, 255, 255);
+            white-space: nowrap;
+            overflow-wrap: normal;
         }
 
         .data-table td {
@@ -507,6 +511,9 @@
         .data-table th .sort-link {
             justify-content: center;
             width: 100%;
+            min-width: 0;
+            white-space: nowrap;
+            overflow-wrap: normal;
         }
 
         .data-table .index-cell {
@@ -520,10 +527,10 @@
 
         .index-header,
         .index-cell {
-            width: 48px;
+            width: 70px;
             text-align: center;
-            padding-left: 12px;
-            padding-right: 12px;
+            padding-left: 6px;
+            padding-right: 6px;
         }
 
         .index-cell {
@@ -624,18 +631,18 @@
             color: #ffffff;
         }
 
-        .sort-link.active {
-            color: var(--accent);
+        .data-table th .sort-link.active {
+            color: #fff;
         }
 
-        .sort-link.active.direction-asc::after {
+        .data-table th .sort-link.active.direction-asc::after {
             content: '\2191';
-            color: var(--accent);
+            color: #fff;
         }
 
-        .sort-link.active.direction-desc::after {
+        .data-table th .sort-link.active.direction-desc::after {
             content: '\2193';
-            color: var(--accent);
+            color: #fff;
         }
 
         .pill-list {
@@ -911,7 +918,7 @@
         });
     })();
 </script>
-<script src="{{ request.url_for('static', path='sticky_table_headers.js') }}?v=20260605-sticky-v3"></script>
+<script src="{{ request.url_for('static', path='sticky_table_headers.js') }}?v=20260827-sticky-v4"></script>
 {% block extra_scripts %}{% endblock %}
 </body>
 </html>

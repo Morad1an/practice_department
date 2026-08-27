@@ -75,6 +75,12 @@
     width: 100%;
 }
 
+.distribution-data-table th.contract-number-col .sort-link,
+.distribution-data-table th.signing-date-col .sort-link {
+    white-space: nowrap;
+    overflow-wrap: normal;
+}
+
 .distribution-data-table .contract-number-col,
 .distribution-data-table .signing-date-col,
 .distribution-data-table .year-col,
@@ -94,15 +100,24 @@
 }
 
 .distribution-data-table .organization-col {
-    min-width: 280px;
+    width: 380px;
+    min-width: 380px;
+}
+
+.distribution-data-table .organization-name {
+    color: inherit;
+    font-size: inherit;
+    font-weight: 400;
 }
 
 .distribution-data-table .contract-number-col {
-    min-width: 150px;
+    width: 210px;
+    min-width: 210px;
 }
 
 .distribution-data-table .signing-date-col {
-    min-width: 140px;
+    width: 180px;
+    min-width: 180px;
 }
 
 .distribution-data-table .year-col,

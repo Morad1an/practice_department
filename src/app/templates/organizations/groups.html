@@ -3,13 +3,32 @@
 {% block title %}Распределение по группам{% endblock %}
 
 {% block extra_head %}
-{% set groups_assets_version = '20260606-groups-v7' %}
+{% set groups_assets_version = '20260827-groups-v8' %}
 <link rel="stylesheet" href="{{ request.url_for('static', path='active_organizations.css') }}?v={{ groups_assets_version }}">
 <style>
     .groups-page .table-scroll {
         overflow-x: auto;
         overflow-y: visible;
     }
+
+    .groups-page .data-table {
+        min-width: 2520px;
+    }
+
+    .groups-page .department-col { width: 150px; }
+    .groups-page .study-direction-code-col { width: 205px; }
+    .groups-page .study-direction-name-col { width: 290px; }
+    .groups-page .study-profile-col { width: 200px; }
+    .groups-page .group-col { width: 105px; }
+    .groups-page .course-col { width: 120px; }
+    .groups-page .quantity-col { width: 280px; }
+    .groups-page .organization-col { width: 270px; }
+    .groups-page .order-col { width: 150px; }
+    .groups-page .signing-date-col { width: 175px; }
+    .groups-page .practice-name-col { width: 250px; }
+    .groups-page .practice-date-begin-col,
+    .groups-page .practice-date-end-col { width: 175px; }
+    .groups-page .practice-chief-col { width: 250px; }
 
     .groups-page .semester-filter {
         position: relative;
@@ -73,19 +92,46 @@
 
     .groups-floating-x-scroll {
         position: fixed;
-        left: 24px;
-        right: 116px;
+        left: 50%;
+        right: auto;
+        width: min(900px, calc(100vw - 160px));
         bottom: 18px;
         z-index: 9;
         overflow-x: auto;
         overflow-y: hidden;
         height: 18px;
         padding-top: 2px;
-        border: 1px solid rgba(17, 19, 32, 0.08);
+        border: 1px solid #9ca3af;
         border-radius: 999px;
-        background: rgba(255, 255, 255, 0.96);
+        background: #cbd5e1;
         box-shadow: 0 12px 30px rgba(15, 23, 42, 0.16);
         backdrop-filter: blur(10px);
+        scrollbar-color: #6b7280 #cbd5e1;
+        scrollbar-width: auto;
+        transform: translateX(-50%);
+    }
+
+    .groups-floating-x-scroll::-webkit-scrollbar {
+        height: 12px;
+    }
+
+    .groups-floating-x-scroll::-webkit-scrollbar-track {
+        border-radius: 999px;
+        background: #cbd5e1;
+    }
+
+    .groups-floating-x-scroll::-webkit-scrollbar-thumb {
+        border: 2px solid #6b7280;
+        border-radius: 999px;
+        background: #4b5563;
+    }
+
+    .groups-floating-x-scroll::-webkit-scrollbar-thumb:hover {
+        background: #374151;
+    }
+
+    .groups-floating-x-scroll + .scroll-top {
+        bottom: 42px;
     }
 
     .groups-floating-x-scroll[hidden] {
@@ -108,8 +154,7 @@
         }
 
         .groups-floating-x-scroll {
-            left: 20px;
-            right: 104px;
+            width: calc(100vw - 48px);
             bottom: 14px;
         }
     }

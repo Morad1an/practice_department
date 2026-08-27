@@ -292,6 +292,18 @@
             `;
         }).join("");
 
+        const tableMinWidth = 210 + 180 + 88 + 380 + ((payload.years.length + 1) * 112);
+        const columnsHtml = `
+            <colgroup>
+                <col class="contract-number-col">
+                <col class="signing-date-col">
+                <col class="logo-col">
+                <col class="organization-col">
+                ${payload.years.map(() => '<col class="year-col">').join("")}
+                <col class="total-col">
+            </colgroup>
+        `;
+
         tableContent.innerHTML = `
             <div class="distribution-meta">
                 <span class="distribution-meta-badge">Период: ${escapeHtml(buildPeriodLabel(currentRange))}</span>
@@ -300,7 +312,8 @@
                 <span class="distribution-meta-badge">Договор: ${escapeHtml(actualContractStatusLabels[currentFilters.actual_contract_status])}</span>
             </div>
             <div class="distribution-table-scroll">
-                <table class="data-table distribution-data-table">
+                <table class="data-table distribution-data-table" style="min-width: ${tableMinWidth}px">
+                    ${columnsHtml}
                     <thead>
                         <tr>${headersHtml}</tr>
                     </thead>

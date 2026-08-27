@@ -29,12 +29,14 @@
 
             this.tick   = this.tick.bind(this);
             this.resize = () => { this._synced = false; this.tick(); };
+            this.frame = null;
 
             window.addEventListener("scroll", this.tick,   {passive: true});
             window.addEventListener("resize", this.resize, {passive: true});
             this.scrollBox?.addEventListener("scroll", this.tick, {passive: true});
 
             this.tick();
+            this.frame = window.requestAnimationFrame(() => this.tick());
         }
 
         /* ---------- floater construction ---------- */
@@ -68,6 +70,10 @@
                 "border-spacing:0",
                 "box-sizing:border-box",
             ].join(";");
+
+            /* Preserve the real column model before cloning the header. */
+            const colgroup = this.table.querySelector(":scope > colgroup")?.cloneNode(true);
+            if (colgroup) tbl.appendChild(colgroup);
 
             /* Clone thead — keeps all classes/text */
             const thead = this.thead.cloneNode(true);
@@ -133,6 +139,18 @@
                 clone.style.boxSizing = "border-box";
             });
 
+            const realColumns = [...this.table.querySelectorAll(":scope > colgroup > col")];
+            const cloneColumns = [...this.floatTable.querySelectorAll(":scope > colgroup > col")];
+            realColumns.forEach((column, i) => {
+                const clone = cloneColumns[i];
+                const cell = realCells[i];
+                if (!clone || !cell) return;
+                const width = cell.getBoundingClientRect().width;
+                clone.style.width = width + "px";
+                clone.style.minWidth = width + "px";
+                clone.style.maxWidth = width + "px";
+            });
+
             /* Set floater height = thead height so clip works */
             this.floater.style.height = this.thead.offsetHeight + "px";
         }
@@ -188,10 +206,12 @@
             this.scrollBox = this.table.closest(SCROLL_BOX_SEL);
             this.anchor    = this.table.closest(ANCHOR_SEL) || this.table.parentElement;
             this.tick();
+            window.requestAnimationFrame(() => this.tick());
         }
 
         destroy() {
             this.floater?.remove();
+            if (this.frame) window.cancelAnimationFrame(this.frame);
             window.removeEventListener("scroll",  this.tick);
             window.removeEventListener("resize",  this.resize);
             this.scrollBox?.removeEventListener("scroll", this.tick);

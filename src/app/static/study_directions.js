@@ -63,8 +63,12 @@
     const applyButton = pageRoot.querySelector("[data-apply-filters]");
     const exportButton = pageRoot.querySelector("[data-export-table]");
     const resetButton = pageRoot.querySelector("[data-reset-filters]");
+    const floatingScrollbar = document.querySelector("[data-floating-x-scroll]");
+    const floatingScrollbarInner = document.querySelector("[data-floating-x-scroll-inner]");
     const tableSelector = "[data-table-root]";
     let tableSection = pageRoot.querySelector(tableSelector);
+    let tableScroll = tableSection?.querySelector(".table-scroll") || null;
+    let userIsScrollingFloating = false;
 
     const fetchHeaders = {
         Accept: "text/html",
@@ -225,6 +229,73 @@
         }
     };
 
+    const syncFloatingScrollFromTable = () => {
+        if (!floatingScrollbar || !tableScroll) {
+            return;
+        }
+        const tableMaxScrollLeft = Math.max(tableScroll.scrollWidth - tableScroll.clientWidth, 0);
+        const floatingMaxScrollLeft = Math.max(
+            floatingScrollbar.scrollWidth - floatingScrollbar.clientWidth,
+            0,
+        );
+        const nextFloatingScrollLeft = tableMaxScrollLeft <= 0 || floatingMaxScrollLeft <= 0
+            ? tableScroll.scrollLeft
+            : (tableScroll.scrollLeft / tableMaxScrollLeft) * floatingMaxScrollLeft;
+        if (Math.abs(floatingScrollbar.scrollLeft - nextFloatingScrollLeft) > 1) {
+            floatingScrollbar.scrollLeft = nextFloatingScrollLeft;
+        }
+    };
+
+    const syncFloatingScrollbarVisibility = () => {
+        if (!floatingScrollbar || !floatingScrollbarInner) {
+            return;
+        }
+        tableScroll = tableSection?.querySelector(".table-scroll") || null;
+        if (!tableScroll) {
+            floatingScrollbar.hidden = true;
+            floatingScrollbar.scrollLeft = 0;
+            floatingScrollbarInner.style.width = "0px";
+            return;
+        }
+        const hasHorizontalOverflow = tableScroll.scrollWidth > tableScroll.clientWidth + 1;
+        floatingScrollbar.hidden = !hasHorizontalOverflow;
+        floatingScrollbarInner.style.width = `${tableScroll.scrollWidth}px`;
+        if (!hasHorizontalOverflow) {
+            floatingScrollbar.scrollLeft = 0;
+            return;
+        }
+        syncFloatingScrollFromTable();
+    };
+
+    const handleTableHorizontalScroll = () => syncFloatingScrollFromTable();
+
+    const handleFloatingHorizontalScroll = () => {
+        if (!floatingScrollbar || !tableScroll || !userIsScrollingFloating) {
+            return;
+        }
+        const floatingMaxScrollLeft = Math.max(
+            floatingScrollbar.scrollWidth - floatingScrollbar.clientWidth,
+            0,
+        );
+        const tableMaxScrollLeft = Math.max(tableScroll.scrollWidth - tableScroll.clientWidth, 0);
+        if (floatingMaxScrollLeft <= 0 || tableMaxScrollLeft <= 0) {
+            tableScroll.scrollLeft = floatingScrollbar.scrollLeft;
+            return;
+        }
+        tableScroll.scrollLeft = (
+            floatingScrollbar.scrollLeft / floatingMaxScrollLeft
+        ) * tableMaxScrollLeft;
+    };
+
+    const bindHorizontalScrollbar = () => {
+        tableScroll = tableSection?.querySelector(".table-scroll") || null;
+        if (tableScroll && tableScroll.dataset.horizontalScrollBound !== "1") {
+            tableScroll.dataset.horizontalScrollBound = "1";
+            tableScroll.addEventListener("scroll", handleTableHorizontalScroll, {passive: true});
+        }
+        syncFloatingScrollbarVisibility();
+    };
+
     const logosController = namespace.createLogosController({
         getTableSection: () => tableSection,
         logoApiUrl: logotypesUrl,
@@ -253,6 +324,7 @@
         defaultSortDir: "asc",
         onTableChanged: () => {
             logosController.setup();
+            bindHorizontalScrollbar();
         },
     });
 
@@ -336,10 +408,25 @@
         window.scrollTo({top: 0, behavior: "smooth"});
     });
 
+    floatingScrollbar?.addEventListener("pointerdown", () => {
+        userIsScrollingFloating = true;
+    });
+    floatingScrollbar?.addEventListener("pointerup", () => {
+        userIsScrollingFloating = false;
+    });
+    floatingScrollbar?.addEventListener("pointercancel", () => {
+        userIsScrollingFloating = false;
+    });
+    window.addEventListener("pointerup", () => {
+        userIsScrollingFloating = false;
+    });
+    floatingScrollbar?.addEventListener("scroll", handleFloatingHorizontalScroll, {passive: true});
+
     filtersController.syncTriggerStates();
     filtersController.syncSummary();
     tableController.rebindTableInteractions();
     logosController.setup();
+    bindHorizontalScrollbar();
     persistState();
     updateHistory("replace");
     filtersController.refreshFilterOptions();
