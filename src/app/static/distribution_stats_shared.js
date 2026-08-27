@@ -291,6 +291,9 @@
 
     const refreshSelectDropdowns = (root = document) => {
         const scope = root instanceof Element ? root : document;
+        if (scope.matches?.("[data-select-dropdown]")) {
+            refreshSelectDropdown(scope);
+        }
         scope.querySelectorAll("[data-select-dropdown]").forEach((dropdown) => {
             refreshSelectDropdown(dropdown);
         });

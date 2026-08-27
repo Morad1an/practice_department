@@ -81,6 +81,18 @@ def test_dadata_populates_existing_primary_okved_requisite():
     assert 'ensureRequisiteValue(["ОКВЭД (ОСНОВНОЙ)", "ОКВЭД"], data.okved)' in source
 
 
+def test_requisite_dropdown_refreshes_when_the_dropdown_itself_is_passed():
+    shared_source = (
+        Path(__file__).resolve().parents[1]
+        / "app"
+        / "static"
+        / "distribution_stats_shared.js"
+    ).read_text(encoding="utf-8")
+
+    assert 'scope.matches?.("[data-select-dropdown]")' in shared_source
+    assert "refreshSelectDropdown(scope);" in shared_source
+
+
 def test_organization_rows_open_on_double_click_even_when_text_is_selected():
     table_source = TABLE_JS.read_text(encoding="utf-8")
     stats_source = STATS_JS.read_text(encoding="utf-8")
