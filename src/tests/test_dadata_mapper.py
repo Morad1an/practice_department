@@ -33,6 +33,12 @@ def test_map_party_response_extracts_supported_fields():
                     "address": {
                         "value": "г Москва, Волгоградский пр-кт, д 42 к 5",
                         "unrestricted_value": "109316, г Москва, Волгоградский пр-кт, д 42 к 5",
+                        "data": {
+                            "city_with_type": "г Москва",
+                            "city": "Москва",
+                            "settlement_with_type": None,
+                            "settlement": None,
+                        },
                     },
                     "emails": [{"value": "info@example.test"}],
                     "state": {"status": "ACTIVE"},
@@ -54,6 +60,7 @@ def test_map_party_response_extracts_supported_fields():
     assert result.chief_name == "Давидюк Андрей Павлович"
     assert result.chief_post == "ГЕНЕРАЛЬНЫЙ ДИРЕКТОР"
     assert result.legal_address == "109316, г Москва, Волгоградский пр-кт, д 42 к 5"
+    assert result.settlement_name == "г. Москва"
     assert result.actual_address is None
     assert result.email == "info@example.test"
     assert result.state_status == "ACTIVE"
@@ -69,6 +76,30 @@ def test_map_party_response_uses_code_when_primary_name_is_unavailable():
     assert result is not None
     assert result.okved == "72.19"
     assert result.okved_name is None
+
+
+def test_map_party_response_falls_back_to_settlement_when_city_is_missing():
+    result = map_party_response(
+        {
+            "suggestions": [
+                {
+                    "data": {
+                        "inn": "7719402047",
+                        "address": {
+                            "data": {
+                                "settlement_with_type": "д Деревня",
+                                "settlement": "Деревня",
+                            }
+                        },
+                    }
+                }
+            ]
+        },
+        requested_inn="7719402047",
+    )
+
+    assert result is not None
+    assert result.settlement_name == "д. Деревня"
 
 
 def test_map_party_response_returns_none_for_empty_suggestions():

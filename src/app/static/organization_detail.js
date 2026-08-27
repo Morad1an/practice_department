@@ -839,6 +839,7 @@
         const fieldMap = [
             ['input[name="name_short"]', data.name_short, "краткое наименование"],
             ['textarea[name="name_long"]', data.name_long, "полное наименование"],
+            ['input[name="settlement_name"]', data.settlement_name, "населённый пункт"],
             ['input[name="chief_name"]', data.chief_name, "руководитель"],
             ['input[name="chief_post"]', data.chief_post, "должность руководителя"],
         ];

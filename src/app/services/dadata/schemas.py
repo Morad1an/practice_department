@@ -19,6 +19,7 @@ class DadataOrganizationData(BaseModel):
     chief_name: str | None = None
     chief_post: str | None = None
     legal_address: str | None = None
+    settlement_name: str | None = None
     actual_address: str | None = None
     email: str | None = None
     state_status: str | None = None

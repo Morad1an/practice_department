@@ -3,6 +3,20 @@ from __future__ import annotations
 from src.app.services.dadata.normalization import normalize_text
 from src.app.services.dadata.schemas import DadataOrganizationData
 
+_LOCALITY_TYPE_ABBREVIATIONS = {
+    "аул",
+    "г",
+    "д",
+    "кп",
+    "п",
+    "пгт",
+    "рп",
+    "с",
+    "ст",
+    "тер",
+    "х",
+}
+
 
 def _read_path(payload: dict, path: tuple[str, ...]) -> object:
     current: object = payload
@@ -52,6 +66,20 @@ def _read_primary_okved(data: dict) -> tuple[str | None, str | None, str | None]
     return raw_code, raw_name, raw_type
 
 
+def _format_locality_name(value: str | None) -> str | None:
+    prepared = normalize_text(value)
+    if not prepared:
+        return None
+    parts = prepared.split(None, 1)
+    if len(parts) != 2:
+        return prepared
+    locality_type, name = parts
+    normalized_type = locality_type.rstrip(".").lower()
+    if normalized_type not in _LOCALITY_TYPE_ABBREVIATIONS:
+        return prepared
+    return f"{normalized_type}. {name}"
+
+
 def map_party_response(payload: dict, *, requested_inn: str) -> DadataOrganizationData | None:
     suggestions = payload.get("suggestions")
     if not isinstance(suggestions, list) or not suggestions:
@@ -77,6 +105,16 @@ def map_party_response(payload: dict, *, requested_inn: str) -> DadataOrganizati
     if legal_address is None:
         legal_address = normalize_text(_read_path(data, ("address", "value")))
 
+    # Dadata returns the locality in the structured address payload. Prefer a
+    # city, then a settlement (including villages and other settlement types).
+    # Do not use a region as a substitute: it is not a populated locality.
+    settlement_name = _format_locality_name(
+        normalize_text(_read_path(data, ("address", "data", "city_with_type")))
+        or normalize_text(_read_path(data, ("address", "data", "city")))
+        or normalize_text(_read_path(data, ("address", "data", "settlement_with_type")))
+        or normalize_text(_read_path(data, ("address", "data", "settlement")))
+    )
+
     okved, okved_name, okved_type = _read_primary_okved(data)
 
     return DadataOrganizationData(
@@ -91,6 +129,7 @@ def map_party_response(payload: dict, *, requested_inn: str) -> DadataOrganizati
         chief_name=normalize_text(_read_path(data, ("management", "name"))),
         chief_post=normalize_text(_read_path(data, ("management", "post"))),
         legal_address=legal_address,
+        settlement_name=settlement_name,
         actual_address=None,
         email=_read_email(data),
         state_status=normalize_text(_read_path(data, ("state", "status"))),

@@ -41,6 +41,7 @@ from src.app.services.dadata.schemas import (
     DadataRefreshAllResponse,
     DadataRefreshResponse,
 )
+from src.app.services.organization_card_write import _resolve_settlement_id
 
 logger = logging.getLogger(__name__)
 
@@ -352,6 +353,12 @@ async def apply_dadata_to_organization(
         organization.inn = data.inn
         if "inn" not in updated:
             updated.append("inn")
+
+    if data.settlement_name:
+        settlement_id = await _resolve_settlement_id(session, data.settlement_name)
+        if organization.settlement_id != settlement_id:
+            organization.settlement_id = settlement_id
+            updated.append("settlement_name")
 
     if await _upsert_email_contact(session, organization_id=organization.id, email=data.email):
         updated.append("email")

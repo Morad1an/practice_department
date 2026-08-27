@@ -93,6 +93,33 @@ def test_apply_dadata_upserts_primary_okved_into_existing_requisite():
     assert "okved" in result.updated_fields
 
 
+def test_apply_dadata_updates_settlement_when_returned():
+    session = AsyncMock()
+    organization = OrganizationOrm(id=1, inn="7719402047", settlement_id=None)
+    data = DadataOrganizationData(inn="7719402047", settlement_name="г. Москва")
+    with (
+        patch(
+            "src.app.services.dadata.sync._resolve_settlement_id",
+            new=AsyncMock(return_value=42),
+        ) as resolve_settlement,
+        patch(
+            "src.app.services.dadata.sync._upsert_requisite",
+            new=AsyncMock(return_value=False),
+        ),
+        patch(
+            "src.app.services.dadata.sync._upsert_email_contact",
+            new=AsyncMock(return_value=False),
+        ),
+    ):
+        result = asyncio.run(
+            apply_dadata_to_organization(session, organization=organization, data=data)
+        )
+
+    resolve_settlement.assert_awaited_once_with(session, "г. Москва")
+    assert organization.settlement_id == 42
+    assert "settlement_name" in result.updated_fields
+
+
 def test_duplicate_inn_group_uses_one_lookup_and_preserves_card_names():
     session = AsyncMock()
     head_office = OrganizationOrm(id=1, inn="7719402047", name_short="Попка")
