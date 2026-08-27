@@ -66,6 +66,13 @@
             return [];
         }
     })();
+    const settlementOptions = (() => {
+        try {
+            return JSON.parse(form.querySelector("[data-settlement-options-json]")?.textContent || "[]");
+        } catch {
+            return [];
+        }
+    })();
     const requisiteTypeOptions = (() => {
         try {
             return JSON.parse(form.querySelector("[data-requisite-type-options-json]")?.textContent || "[]");
@@ -79,6 +86,9 @@
     const studyFieldSuggestionsList = form.querySelector("[data-study-field-suggestions-list]");
     const addStudyFieldButton = form.querySelector("[data-add-study-field]");
     const emptyStudyFieldsNote = form.querySelector("[data-empty-study-fields-note]");
+    const settlementInput = form.querySelector('input[name="settlement_name"]');
+    const settlementSuggestionsPanel = form.querySelector("[data-settlement-suggestions]");
+    const settlementSuggestionsList = form.querySelector("[data-settlement-suggestions-list]");
     const requisitesList = form.querySelector("[data-requisites-list]");
     const requisiteTypeSelect = form.querySelector("[data-requisite-type-select]");
     const requisiteTypeDropdown = requisiteTypeSelect?.closest("[data-select-dropdown]") || null;
@@ -474,7 +484,7 @@
         const normalizedQuery = normalizeOptionLabel(query);
         const available = getAvailableStudyFieldOptions();
         if (!normalizedQuery) {
-            return available.slice(0, 20);
+            return available;
         }
         return available
             .filter((option) => normalizeOptionLabel(option?.label).includes(normalizedQuery))
@@ -535,6 +545,57 @@
         ) {
             renderStudyFieldSuggestions(studyFieldSearch.value);
         }
+    };
+
+    const filterSettlementOptions = (query) => {
+        const normalizedQuery = normalizeLookupLabel(query);
+        const options = settlementOptions.filter((option) => String(option?.label || "").trim());
+        if (!normalizedQuery) {
+            return options;
+        }
+        return options
+            .filter((option) => normalizeLookupLabel(option.label).includes(normalizedQuery))
+            .slice(0, 20);
+    };
+
+    const closeSettlementSuggestions = () => {
+        if (!(settlementSuggestionsPanel instanceof HTMLElement)) {
+            return;
+        }
+        settlementSuggestionsPanel.hidden = true;
+        settlementInput?.setAttribute("aria-expanded", "false");
+    };
+
+    const renderSettlementSuggestions = (query = "") => {
+        if (
+            !(settlementSuggestionsPanel instanceof HTMLElement)
+            || !(settlementSuggestionsList instanceof HTMLElement)
+        ) {
+            return;
+        }
+        const options = filterSettlementOptions(query);
+        settlementSuggestionsList.innerHTML = "";
+        if (!options.length) {
+            closeSettlementSuggestions();
+            return;
+        }
+        options.forEach((option) => {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = "organization-study-suggestion";
+            button.textContent = option.label || "";
+            button.addEventListener("mousedown", (event) => event.preventDefault());
+            button.addEventListener("click", () => {
+                if (settlementInput instanceof HTMLInputElement) {
+                    settlementInput.value = option.label || "";
+                    settlementInput.dispatchEvent(new Event("input", {bubbles: true}));
+                }
+                closeSettlementSuggestions();
+            });
+            settlementSuggestionsList.appendChild(button);
+        });
+        settlementSuggestionsPanel.hidden = false;
+        settlementInput?.setAttribute("aria-expanded", "true");
     };
 
     const buildStudyFieldChip = (option) => {
@@ -1657,6 +1718,22 @@
         window.setTimeout(closeStudyFieldSuggestions, 150);
     });
 
+    settlementInput?.addEventListener("input", () => {
+        if (settlementInput instanceof HTMLInputElement) {
+            renderSettlementSuggestions(settlementInput.value);
+        }
+    });
+
+    settlementInput?.addEventListener("focus", () => {
+        if (settlementInput instanceof HTMLInputElement) {
+            renderSettlementSuggestions(settlementInput.value);
+        }
+    });
+
+    settlementInput?.addEventListener("blur", () => {
+        window.setTimeout(closeSettlementSuggestions, 150);
+    });
+
     document.addEventListener("click", (event) => {
         const target = event.target;
         if (!(target instanceof Element)) {
@@ -1669,6 +1746,10 @@
             return;
         }
         closeStudyFieldSuggestions();
+        if (target.closest("[name=\"settlement_name\"]") || target.closest("[data-settlement-suggestions]")) {
+            return;
+        }
+        closeSettlementSuggestions();
     });
 
     studyFieldList?.addEventListener("click", async (event) => {

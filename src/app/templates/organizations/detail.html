@@ -50,6 +50,7 @@
         {% endif %}
     >
         <script type="application/json" data-study-field-options-json>{{ study_field_options | tojson }}</script>
+        <script type="application/json" data-settlement-options-json>{{ settlement_options | tojson }}</script>
         <script type="application/json" data-requisite-type-options-json>{{ requisite_type_options | tojson }}</script>
         <div class="organization-form-status" data-form-status hidden></div>
         <div class="organization-toast" data-organization-toast hidden></div>
@@ -81,20 +82,29 @@
                     <div class="organization-field organization-field-full">
                         <span class="organization-field-label">Населённый пункт <span class="organization-required-mark">*</span></span>
                         <div class="organization-field-inline">
-                            <input
-                                type="text"
-                                name="settlement_name"
-                                list="organization-settlement-options"
-                                value="{{ organization.settlement_name or '' }}"
-                                placeholder="Начните вводить город"
-                                autocomplete="off"
-                                required
-                            >
-                            <datalist id="organization-settlement-options">
-                                {% for option in settlement_options or [] %}
-                                    <option value="{{ option.label }}"></option>
-                                {% endfor %}
-                            </datalist>
+                            <div class="organization-settlement-field">
+                                <input
+                                    type="text"
+                                    name="settlement_name"
+                                    class="organization-settlement-search"
+                                    value="{{ organization.settlement_name or '' }}"
+                                    placeholder="Начните вводить город"
+                                    autocomplete="off"
+                                    role="combobox"
+                                    aria-expanded="false"
+                                    aria-controls="organization-settlement-suggestions"
+                                    aria-autocomplete="list"
+                                    required
+                                >
+                                <div
+                                    id="organization-settlement-suggestions"
+                                    class="organization-study-suggestions organization-settlement-suggestions"
+                                    data-settlement-suggestions
+                                    hidden
+                                >
+                                    <div class="organization-study-suggestions-list" data-settlement-suggestions-list></div>
+                                </div>
+                            </div>
                             {% if not create_mode %}
                                 <button
                                     type="button"

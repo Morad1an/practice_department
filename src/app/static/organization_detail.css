@@ -289,7 +289,20 @@
     min-width: 0;
 }
 
+.organization-settlement-field {
+    position: relative;
+    width: min(100%, 360px);
+    flex: 0 1 360px;
+    min-width: 0;
+}
+
 .organization-study-search {
+    width: 100%;
+    color: var(--text-main);
+    background: #fff;
+}
+
+.organization-settlement-search {
     width: 100%;
     color: var(--text-main);
     background: #fff;

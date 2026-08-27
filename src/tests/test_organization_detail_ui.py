@@ -56,6 +56,22 @@ def test_organization_website_allows_dash_without_disabling_url_validation():
     assert 'websiteInput?.addEventListener("input", syncWebsiteInputType);' in detail_source
 
 
+def test_settlement_uses_custom_suggestions_while_allowing_free_text():
+    detail_template = DETAIL_TEMPLATE.read_text(encoding="utf-8")
+    detail_source = DETAIL_JS.read_text(encoding="utf-8")
+
+    assert 'data-settlement-options-json' in detail_template
+    assert 'data-settlement-suggestions' in detail_template
+    assert 'data-settlement-suggestions-list' in detail_template
+    assert 'const filterSettlementOptions = (query) =>' in detail_source
+    assert 'return options;\n        }\n        return options' in detail_source
+    assert 'const filterAvailableStudyFieldOptions = (query) =>' in detail_source
+    assert 'return available;\n        }\n        return available' in detail_source
+    assert 'settlementInput?.addEventListener("focus"' in detail_source
+    assert 'settlementInput?.addEventListener("input"' in detail_source
+    assert 'settlementInput.value = option.label || "";' in detail_source
+
+
 def test_full_refresh_status_monitor_is_nonblocking_and_survives_page_reload():
     source = ACTIVE_JS.read_text(encoding="utf-8")
 
