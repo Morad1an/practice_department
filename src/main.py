@@ -1,7 +1,7 @@
 import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
-from urllib.parse import quote
+from urllib.parse import quote_from_bytes
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, PlainTextResponse, RedirectResponse, Response
@@ -54,12 +54,18 @@ def _is_public_path(path: str) -> bool:
     return path in _PUBLIC_PATHS or any(path.startswith(prefix) for prefix in _PUBLIC_PREFIXES)
 
 
-def _build_login_redirect(request: Request) -> RedirectResponse:
-    next_path = request.url.path
-    if request.url.query:
-        next_path = f"{next_path}?{request.url.query}"
+def _request_scope_path(request: Request) -> str:
+    path = request.scope.get("path")
+    return path if isinstance(path, str) else ""
+
+
+def _build_login_redirect(request: Request, *, request_path: str) -> RedirectResponse:
+    next_target = request_path.encode("utf-8")
+    query_string = request.scope.get("query_string", b"")
+    if isinstance(query_string, bytes) and query_string:
+        next_target = b"?".join((next_target, query_string))
     return RedirectResponse(
-        url=f"/login?next={quote(next_path, safe='')}",
+        url=f"/login?next={quote_from_bytes(next_target, safe='')}",
         status_code=303,
     )
 
@@ -81,9 +87,10 @@ async def auth_session_middleware(request: Request, call_next):
     request.state.can_edit = False
     request.state.can_admin = False
     request.state.csrf_token, csrf_cookie_needs_refresh = ensure_request_csrf_token(request)
-    is_public_path = _is_public_path(request.url.path)
+    request_path = _request_scope_path(request)
+    is_public_path = _is_public_path(request_path)
 
-    if (not is_public_path) or request.url.path in _AUTH_OPTIONAL_PUBLIC_PATHS:
+    if (not is_public_path) or request_path in _AUTH_OPTIONAL_PUBLIC_PATHS:
         request.state.current_user = await resolve_auth_user_from_session_cookie(request)
         request.state.can_edit = bool(
             request.state.current_user is not None and request.state.current_user.can_edit
@@ -93,7 +100,7 @@ async def auth_session_middleware(request: Request, call_next):
         )
 
     if not is_public_path and request.state.current_user is None:
-        if request.url.path.startswith("/api/") or request.method != "GET":
+        if request_path.startswith("/api/") or request.method != "GET":
             auth_response: Response = JSONResponse(
                 {"detail": "Требуется авторизация."},
                 status_code=401,
@@ -101,7 +108,7 @@ async def auth_session_middleware(request: Request, call_next):
             _set_csrf_cookie(auth_response, request.state.csrf_token)
             return auth_response
 
-        redirect_response = _build_login_redirect(request)
+        redirect_response = _build_login_redirect(request, request_path=request_path)
         redirect_response.delete_cookie(
             key=settings.AUTH_COOKIE_NAME,
             httponly=True,
@@ -114,7 +121,7 @@ async def auth_session_middleware(request: Request, call_next):
 
     requires_csrf = (
         request.method not in _SAFE_METHODS
-        and request.url.path not in {"/logout"}
+        and request_path not in {"/logout"}
         and (not is_public_path and request.state.current_user is not None)
     )
     if requires_csrf:
@@ -125,7 +132,7 @@ async def auth_session_middleware(request: Request, call_next):
         if not is_valid_csrf:
             csrf_response: Response = (
                 JSONResponse({"detail": "CSRF validation failed."}, status_code=403)
-                if request.url.path.startswith("/api/")
+                if request_path.startswith("/api/")
                 else PlainTextResponse("CSRF validation failed.", status_code=403)
             )
             _set_csrf_cookie(csrf_response, request.state.csrf_token)

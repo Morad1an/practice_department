@@ -443,10 +443,10 @@ async def refresh_organization_from_dadata(
         )
 
     try:
-        normalized_inn = (
-            normalize_inn(inn) if inn else await _find_organization_inn(session, organization_id)
-        )
+        current_inn = normalize_inn(organization.inn) if organization.inn else None
+        normalized_inn = normalize_inn(inn) if inn else current_inn
     except DadataValidationError:
+        current_inn = None
         normalized_inn = None
     if normalized_inn is None:
         return DadataRefreshResponse(
@@ -454,6 +454,17 @@ async def refresh_organization_from_dadata(
             organization_id=organization_id,
             message="У организации не заполнен ИНН.",
         )
+    if current_inn != normalized_inn:
+        await session.rollback()
+        return DadataRefreshResponse(
+            status="skipped",
+            organization_id=organization_id,
+            message="ИНН организации изменился; устаревшее обновление пропущено.",
+        )
+
+    # Do not keep a database transaction open during the external request.  The
+    # organization and its current INN group are locked and re-read afterwards.
+    await session.rollback()
 
     try:
         data = await find_party_by_inn(
@@ -493,17 +504,49 @@ async def refresh_organization_from_dadata(
             message="Организация по ИНН не найдена.",
         )
 
+    organization = await session.scalar(
+        select(OrganizationOrm)
+        .where(OrganizationOrm.id == organization_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if organization is None:
+        await session.rollback()
+        return DadataRefreshResponse(
+            status="skipped",
+            organization_id=organization_id,
+            message="Организация удалена; устаревшее обновление пропущено.",
+        )
+    try:
+        current_inn = normalize_inn(organization.inn) if organization.inn else None
+    except DadataValidationError:
+        current_inn = None
+    if current_inn != normalized_inn:
+        await session.rollback()
+        return DadataRefreshResponse(
+            status="skipped",
+            organization_id=organization_id,
+            message="ИНН организации изменился; устаревшее обновление пропущено.",
+        )
+
     organizations = list(
         (
             await session.scalars(
                 select(OrganizationOrm)
                 .where(OrganizationOrm.inn == normalized_inn)
                 .order_by(OrganizationOrm.id.asc())
+                .with_for_update()
+                .execution_options(populate_existing=True)
             )
         ).all()
     )
-    if not organizations:
-        organizations = [organization]
+    if not any(group_organization.id == organization_id for group_organization in organizations):
+        await session.rollback()
+        return DadataRefreshResponse(
+            status="skipped",
+            organization_id=organization_id,
+            message="Состав группы ИНН изменился; устаревшее обновление пропущено.",
+        )
     update_names = len(organizations) == 1
     updated_fields: set[str] = set()
     for group_organization in organizations:

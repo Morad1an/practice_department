@@ -127,6 +127,7 @@ def test_duplicate_inn_group_uses_one_lookup_and_preserves_card_names():
     scalar_result = Mock()
     scalar_result.all.return_value = [head_office, branch]
     session.get.return_value = head_office
+    session.scalar.return_value = head_office
     session.scalars.return_value = scalar_result
     data = DadataOrganizationData(
         inn="7719402047",
@@ -158,6 +159,101 @@ def test_duplicate_inn_group_uses_one_lookup_and_preserves_card_names():
     assert branch.name_short == "Попка, филиал Москва"
     assert head_office.chief_name == "Новый руководитель"
     assert branch.chief_name == "Новый руководитель"
+
+
+def test_refresh_skips_stale_result_when_inn_changes_during_lookup():
+    session = AsyncMock()
+    original = OrganizationOrm(id=1, inn="7719402047")
+    changed = OrganizationOrm(id=1, inn="7707083893", chief_name="Ручное значение")
+    remaining_old_group_member = OrganizationOrm(id=2, inn="7719402047")
+    current_group = Mock()
+    current_group.all.return_value = [remaining_old_group_member]
+    session.get.return_value = original
+    session.scalar.return_value = changed
+    session.scalars.return_value = current_group
+    data = DadataOrganizationData(inn="7719402047", chief_name="Устаревшее значение")
+    apply_mock = AsyncMock(return_value=Mock(updated_fields=[]))
+
+    with (
+        patch(
+            "src.app.services.dadata.sync.find_party_by_inn",
+            new=AsyncMock(return_value=data),
+        ),
+        patch(
+            "src.app.services.dadata.sync.apply_dadata_to_organization",
+            new=apply_mock,
+        ),
+    ):
+        result = asyncio.run(
+            refresh_organization_from_dadata(
+                session,
+                organization_id=1,
+                inn="7719402047",
+            )
+        )
+
+    assert result.status == "skipped"
+    assert changed.inn == "7707083893"
+    assert changed.chief_name == "Ручное значение"
+    apply_mock.assert_not_awaited()
+
+
+def test_refresh_skips_queued_inn_that_is_already_stale():
+    session = AsyncMock()
+    session.get.return_value = OrganizationOrm(
+        id=1,
+        inn="7707083893",
+        chief_name="Новое ручное значение",
+    )
+    lookup_mock = AsyncMock()
+
+    with patch(
+        "src.app.services.dadata.sync.find_party_by_inn",
+        new=lookup_mock,
+    ):
+        result = asyncio.run(
+            refresh_organization_from_dadata(
+                session,
+                organization_id=1,
+                inn="7719402047",
+            )
+        )
+
+    assert result.status == "skipped"
+    lookup_mock.assert_not_awaited()
+    session.rollback.assert_awaited_once()
+
+
+def test_refresh_skips_stale_result_when_organization_is_deleted_during_lookup():
+    session = AsyncMock()
+    session.get.return_value = OrganizationOrm(id=1, inn="7719402047")
+    session.scalar.return_value = None
+    empty_group = Mock()
+    empty_group.all.return_value = []
+    session.scalars.return_value = empty_group
+    data = DadataOrganizationData(inn="7719402047", chief_name="Устаревшее значение")
+    apply_mock = AsyncMock(return_value=Mock(updated_fields=[]))
+
+    with (
+        patch(
+            "src.app.services.dadata.sync.find_party_by_inn",
+            new=AsyncMock(return_value=data),
+        ),
+        patch(
+            "src.app.services.dadata.sync.apply_dadata_to_organization",
+            new=apply_mock,
+        ),
+    ):
+        result = asyncio.run(
+            refresh_organization_from_dadata(
+                session,
+                organization_id=1,
+                inn="7719402047",
+            )
+        )
+
+    assert result.status == "skipped"
+    apply_mock.assert_not_awaited()
 
 
 def test_failed_full_refresh_does_not_move_schedule():

@@ -72,6 +72,62 @@ class AuthAccessTests(unittest.TestCase):
         self.assertEqual(response.status_code, 401)
         self.assertEqual(response.json(), {"detail": "Требуется авторизация."})
 
+    def test_host_header_cannot_make_private_api_public(self):
+        search = AsyncMock(return_value=[])
+        with patch(
+            "src.app.api.organizations_api.search_organizations_for_header",
+            new=search,
+        ):
+            response = self.client.get(
+                "/api/organizations/search?q=test",
+                headers={"Host": "example.invalid/login?"},
+            )
+
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.json(), {"detail": "Требуется авторизация."})
+        search.assert_not_awaited()
+
+    def test_host_header_cannot_hide_private_page_path_in_login_redirect(self):
+        page_context = AsyncMock()
+        with patch(
+            "src.app.api.organizations_pages.build_active_organizations_page_context",
+            new=page_context,
+        ):
+            response = self.client.get(
+                "/organizations/active?sort_dir=desc",
+                headers={"Host": "example.invalid/login?"},
+                follow_redirects=False,
+            )
+
+        self.assertEqual(response.status_code, 303)
+        self.assertEqual(
+            response.headers["location"],
+            "/login?next=%2Forganizations%2Factive%3Fsort_dir%3Ddesc",
+        )
+        page_context.assert_not_awaited()
+
+    def test_host_header_cannot_bypass_csrf_for_authenticated_editor(self):
+        save = AsyncMock(return_value=77)
+        with (
+            patch(
+                "src.main.resolve_auth_user_from_session_cookie",
+                new=AsyncMock(return_value=build_user(role="editor")),
+            ),
+            patch(
+                "src.app.api.organizations_api.save_organization_card",
+                new=save,
+            ),
+        ):
+            response = self.client.post(
+                "/api/organizations",
+                json={"contacts": [], "requisites": []},
+                headers={"Host": "example.invalid/login?"},
+            )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json(), {"detail": "CSRF validation failed."})
+        save.assert_not_awaited()
+
     def test_login_success_sets_cookie_and_redirects(self):
         with patch(
             "src.app.api.auth_pages.authenticate_user",

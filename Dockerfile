@@ -6,9 +6,11 @@ ENV PYTHONUNBUFFERED=1
 WORKDIR /app
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends default-mysql-client build-essential pkg-config \
+    && apt-get install -y --no-install-recommends default-mysql-client \
     && rm -rf /var/lib/apt/lists/*
 
+# The image contains runtime dependencies only; development tools are in
+# requirements-dev.txt and are intentionally not copied here.
 COPY requirements.txt requirements.txt
 
 RUN pip install --upgrade pip \

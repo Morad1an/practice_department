@@ -5,11 +5,11 @@ ISORT := .venv/bin/isort
 FLAKE8 := .venv/bin/flake8
 MYPY := .venv/bin/mypy
 
-.PHONY: requirements start stop test black isort format flake8 mypy lint
+.PHONY: requirements start stop test test-unit check-docs black isort format flake8 mypy lint
 
 requirements:
 	$(PIP) install --upgrade pip
-	$(PIP) install -r requirements.txt
+	$(PIP) install -r requirements-dev.txt
 
 start:
 	docker compose up --build -d
@@ -19,6 +19,12 @@ stop:
 
 test:
 	$(PYTHON) -m pytest -q
+
+test-unit:
+	$(PYTHON) scripts/check_project.py unit
+
+check-docs:
+	python3 scripts/check_project.py docs
 
 black:
 	cd src && ../$(BLACK) --config pyproject.toml .

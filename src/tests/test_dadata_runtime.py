@@ -9,6 +9,7 @@ from src.app.database import async_session_maker, engine
 from src.app.services.dadata.runtime import (
     _reserve_daily_request_in_database,
     enqueue_job,
+    finish_job,
     promote_scheduled_jobs,
     recover_stale_jobs,
     wait_for_full_refresh_rps_slot,
@@ -47,6 +48,17 @@ class _FakeRedis:
     def pipeline(self, *, transaction=True):
         del transaction
         return _FakePipeline()
+
+
+class _FinishRedis:
+    def __init__(self, outcomes):
+        self.outcomes = list(outcomes)
+        self.scripts = []
+
+    async def eval(self, script, numkeys, *args):
+        del numkeys, args
+        self.scripts.append(script)
+        return self.outcomes.pop(0)
 
 
 def test_enqueue_job_creates_redis_backed_status_and_dedupe():
@@ -88,8 +100,52 @@ def test_rps_check_and_reservation_are_atomic_in_one_script():
     assert "ZADD" in limiter_script
 
 
+def test_finish_job_counts_repeated_terminal_result_once():
+    redis = _FinishRedis([1, 0])
+    metric_mock = AsyncMock()
+
+    async def finish_twice():
+        with (
+            patch(
+                "src.app.services.dadata.runtime.require_redis_client",
+                new=AsyncMock(return_value=redis),
+            ),
+            patch("src.app.services.dadata.runtime.record_metric", metric_mock),
+        ):
+            first = await finish_job("child-1", status="success", claim_token="attempt-1")
+            second = await finish_job("child-1", status="success", claim_token="attempt-1")
+        return first, second
+
+    assert asyncio.run(finish_twice()) == (True, False)
+    metric_mock.assert_awaited_once_with("jobs_success")
+    assert all("claim_token" in script and "HINCRBY" in script for script in redis.scripts)
+
+
+def test_finish_job_keeps_first_terminal_result_from_competing_attempts():
+    redis = _FinishRedis([1, 0])
+    metric_mock = AsyncMock()
+
+    async def finish_with_different_results():
+        with (
+            patch(
+                "src.app.services.dadata.runtime.require_redis_client",
+                new=AsyncMock(return_value=redis),
+            ),
+            patch("src.app.services.dadata.runtime.record_metric", metric_mock),
+        ):
+            first = await finish_job("child-1", status="success", claim_token="attempt-1")
+            second = await finish_job("child-1", status="failed", claim_token="attempt-2")
+        return first, second
+
+    assert asyncio.run(finish_with_different_results()) == (True, False)
+    metric_mock.assert_awaited_once_with("jobs_success")
+
+
 def test_recovery_reclaims_pending_stream_entry_after_worker_failure():
     class RecoveryRedis:
+        def __init__(self):
+            self.recovery_calls = []
+
         async def zrangebyscore(self, *args):
             return []
 
@@ -101,24 +157,55 @@ def test_recovery_reclaims_pending_stream_entry_after_worker_failure():
         async def xack(self, *args):
             return 1
 
+        async def eval(self, script, numkeys, *args):
+            del script, numkeys
+            self.recovery_calls.append(args)
+            return 1
+
     redis = RecoveryRedis()
-    requeue_mock = AsyncMock()
-    with (
-        patch(
-            "src.app.services.dadata.runtime.require_redis_client",
-            new=AsyncMock(return_value=redis),
-        ),
-        patch(
-            "src.app.services.dadata.runtime.get_job",
-            new=AsyncMock(return_value={"job_id": "job-1", "status": "running"}),
-        ),
-        patch("src.app.services.dadata.runtime.requeue_job", requeue_mock),
+    with patch(
+        "src.app.services.dadata.runtime.require_redis_client",
+        new=AsyncMock(return_value=redis),
     ):
         recovered = asyncio.run(recover_stale_jobs())
 
     assert recovered == 1
-    requeue_mock.assert_awaited_once()
-    assert requeue_mock.await_args.kwargs["stream_entry_id"] == "1-0"
+    assert len(redis.recovery_calls) == 1
+    assert redis.recovery_calls[0][6].endswith("manual-high")
+    assert redis.recovery_calls[0][7] == "1-0"
+
+
+def test_recovery_keeps_pending_stream_entry_with_live_heartbeat_lease():
+    class RecoveryRedis:
+        def __init__(self):
+            self.recovery_scripts = []
+
+        async def zrangebyscore(self, *args):
+            return []
+
+        async def xautoclaim(self, stream, *args, **kwargs):
+            if stream.endswith("manual-high"):
+                return ("0-0", [("1-0", {"job_id": "job-1"})], [])
+            return ("0-0", [], [])
+
+        async def xack(self, *args):
+            return 1
+
+        async def eval(self, script, numkeys, *args):
+            del numkeys, args
+            self.recovery_scripts.append(script)
+            return 0
+
+    redis = RecoveryRedis()
+    with patch(
+        "src.app.services.dadata.runtime.require_redis_client",
+        new=AsyncMock(return_value=redis),
+    ):
+        recovered = asyncio.run(recover_stale_jobs())
+
+    assert recovered == 0
+    assert len(redis.recovery_scripts) == 1
+    assert "ZSCORE" in redis.recovery_scripts[0]
 
 
 def test_due_retry_is_promoted_back_to_its_priority_stream_once():

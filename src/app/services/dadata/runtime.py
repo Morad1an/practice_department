@@ -36,6 +36,118 @@ JOB_KEY_PREFIX = "dadata:job:"
 FULL_REFRESH_PROGRESS_PREFIX = "dadata:full-refresh:progress:"
 JOB_LEASE_SECONDS = 120
 
+_HEARTBEAT_JOB_SCRIPT = """
+local raw = redis.call('GET', KEYS[1])
+if not raw then return 0 end
+local job = cjson.decode(raw)
+if job.status ~= 'running' then return 0 end
+if job.claim_token ~= ARGV[3] then return 0 end
+return redis.call('ZADD', KEYS[2], ARGV[1], ARGV[2])
+"""
+
+_FINISH_JOB_SCRIPT = """
+local raw = redis.call('GET', KEYS[1])
+if not raw then return 0 end
+local job = cjson.decode(raw)
+if job.status ~= 'running' or job.claim_token ~= ARGV[2] then return 0 end
+
+job.status = ARGV[3]
+job.result = cjson.decode(ARGV[4])
+job.message = cjson.decode(ARGV[5])
+job.updated_at = tonumber(ARGV[6])
+job.claim_token = nil
+redis.call('SET', KEYS[1], cjson.encode(job), 'EX', ARGV[7])
+redis.call('ZREM', KEYS[2], ARGV[1])
+if type(job.stream_key) == 'string' and type(job.stream_entry_id) == 'string' then
+    redis.call('XACK', job.stream_key, ARGV[8], job.stream_entry_id)
+end
+
+if type(job.payload) == 'table' and job.payload.parent_job_id then
+    local progress_key = ARGV[9] .. tostring(job.payload.parent_job_id)
+    local progress_weight = tonumber(job.payload.progress_weight) or 1
+    if progress_weight < 1 then progress_weight = 1 end
+    redis.call('HINCRBY', progress_key, 'processed', progress_weight)
+    redis.call('HINCRBY', progress_key, 'status:' .. ARGV[3], progress_weight)
+    redis.call('EXPIRE', progress_key, ARGV[7])
+end
+if type(job.active_user_key) == 'string' and job.active_user_key ~= '' then
+    redis.call('ZREM', job.active_user_key, ARGV[1])
+end
+if type(job.dedupe_key) == 'string' then
+    local dedupe_key = ARGV[10] .. job.dedupe_key
+    if redis.call('GET', dedupe_key) == ARGV[1] then
+        redis.call('DEL', dedupe_key)
+    end
+end
+return 1
+"""
+
+_RECOVER_JOB_SCRIPT = """
+local claimed_stream = ARGV[5]
+local claimed_entry = ARGV[6]
+local function acknowledge_claimed_entry()
+    if claimed_stream ~= '' and claimed_entry ~= '' then
+        redis.call('XACK', claimed_stream, ARGV[4], claimed_entry)
+    end
+end
+
+local raw = redis.call('GET', KEYS[1])
+if not raw then
+    redis.call('ZREM', KEYS[2], ARGV[1])
+    acknowledge_claimed_entry()
+    return 0
+end
+
+local job = cjson.decode(raw)
+if job.status == 'success'
+    or job.status == 'failed'
+    or job.status == 'rate_limited'
+    or job.status == 'not_found'
+    or job.status == 'skipped' then
+    redis.call('ZREM', KEYS[2], ARGV[1])
+    acknowledge_claimed_entry()
+    return 0
+end
+
+local lease = redis.call('ZSCORE', KEYS[2], ARGV[1])
+if job.status == 'running' and lease and tonumber(lease) > tonumber(ARGV[2]) then
+    return 0
+end
+if claimed_stream == '' and job.status ~= 'running' then
+    redis.call('ZREM', KEYS[2], ARGV[1])
+    return 0
+end
+
+local source_stream = claimed_stream
+local source_entry = claimed_entry
+if source_stream == '' and type(job.stream_key) == 'string' then
+    source_stream = job.stream_key
+end
+if source_entry == '' and type(job.stream_entry_id) == 'string' then
+    source_entry = job.stream_entry_id
+end
+if claimed_stream ~= '' then
+    job.stream_key = claimed_stream
+    job.stream_entry_id = claimed_entry
+end
+
+job.status = 'queued'
+job.message = ARGV[3]
+job.updated_at = tonumber(ARGV[2])
+job.claim_token = nil
+redis.call('SET', KEYS[1], cjson.encode(job), 'EX', ARGV[8])
+redis.call('ZREM', KEYS[2], ARGV[1])
+if source_stream ~= '' and source_entry ~= '' then
+    redis.call('XACK', source_stream, ARGV[4], source_entry)
+end
+local queue_key = job.queue_key
+if type(queue_key) ~= 'string' or queue_key == '' then
+    queue_key = ARGV[7]
+end
+redis.call('XADD', queue_key, '*', 'job_id', ARGV[1])
+return 1
+"""
+
 
 class DadataRuntimeError(RuntimeError):
     """Raised when Redis-backed Dadata coordination is unavailable."""
@@ -295,7 +407,7 @@ async def get_job(job_id: str) -> dict[str, Any] | None:
     return value if isinstance(value, dict) else None
 
 
-async def _save_job(job: dict[str, Any], *, terminal: bool = False) -> None:
+async def _save_job(job: dict[str, Any]) -> None:
     redis = await require_redis_client()
     job_id = str(job["job_id"])
     job["updated_at"] = time.time()
@@ -306,36 +418,7 @@ async def _save_job(job: dict[str, Any], *, terminal: bool = False) -> None:
                 json.dumps(job, ensure_ascii=False),
                 ex=settings.DADATA_JOB_STATUS_TTL_SECONDS,
             )
-            if terminal:
-                pipe.zrem(ACTIVE_JOBS_KEY, job_id)
-                if job.get("stream_key") and job.get("stream_entry_id"):
-                    pipe.xack(job["stream_key"], STREAM_GROUP, job["stream_entry_id"])
-                parent_job_id = (job.get("payload") or {}).get("parent_job_id")
-                if parent_job_id:
-                    progress_key = f"{FULL_REFRESH_PROGRESS_PREFIX}{parent_job_id}"
-                    progress_weight = max(
-                        int((job.get("payload") or {}).get("progress_weight", 1)),
-                        1,
-                    )
-                    pipe.hincrby(progress_key, "processed", progress_weight)
-                    pipe.hincrby(progress_key, f"status:{job['status']}", progress_weight)
-                    pipe.expire(progress_key, settings.DADATA_JOB_STATUS_TTL_SECONDS)
-                if job.get("active_user_key"):
-                    pipe.zrem(job["active_user_key"], job_id)
             await pipe.execute()
-        if terminal:
-            release_dedupe_script = """
-            if redis.call('GET', KEYS[1]) == ARGV[1] then
-                return redis.call('DEL', KEYS[1])
-            end
-            return 0
-            """
-            await redis.eval(
-                release_dedupe_script,
-                1,
-                f"dadata:dedupe:{job['dedupe_key']}",
-                job_id,
-            )
     except RedisErrorType as error:
         raise DadataRuntimeError("Не удалось сохранить состояние задачи Dadata.") from error
 
@@ -397,6 +480,7 @@ async def claim_next_job(*, timeout_seconds: int = 5) -> dict[str, Any] | None: 
     if "job_id" not in locals():
         return None
     now = time.time()
+    claim_token = uuid.uuid4().hex
     claim_script = """
     local raw = redis.call('GET', KEYS[1])
     if not raw then return nil end
@@ -404,6 +488,7 @@ async def claim_next_job(*, timeout_seconds: int = 5) -> dict[str, Any] | None: 
     if job.status ~= 'queued' then return nil end
     job.status = 'running'
     job.updated_at = tonumber(ARGV[1])
+    job.claim_token = ARGV[5]
     local encoded = cjson.encode(job)
     redis.call('SET', KEYS[1], encoded, 'EX', ARGV[2])
     redis.call('ZADD', KEYS[2], ARGV[3], ARGV[4])
@@ -419,6 +504,7 @@ async def claim_next_job(*, timeout_seconds: int = 5) -> dict[str, Any] | None: 
             settings.DADATA_JOB_STATUS_TTL_SECONDS,
             now + JOB_LEASE_SECONDS,
             job_id,
+            claim_token,
         )
     except RedisErrorType as error:
         raise DadataRuntimeError("Не удалось захватить задачу Dadata.") from error
@@ -437,10 +523,18 @@ async def claim_next_job(*, timeout_seconds: int = 5) -> dict[str, Any] | None: 
     return job
 
 
-async def heartbeat_job(job_id: str) -> None:
+async def heartbeat_job(job_id: str, *, claim_token: str) -> None:
     redis = await require_redis_client()
     try:
-        await redis.zadd(ACTIVE_JOBS_KEY, {job_id: time.time() + JOB_LEASE_SECONDS})
+        await redis.eval(
+            _HEARTBEAT_JOB_SCRIPT,
+            2,
+            f"{JOB_KEY_PREFIX}{job_id}",
+            ACTIVE_JOBS_KEY,
+            time.time() + JOB_LEASE_SECONDS,
+            job_id,
+            claim_token,
+        )
     except RedisErrorType as error:
         raise DadataRuntimeError("Не удалось продлить задачу Dadata.") from error
 
@@ -448,18 +542,37 @@ async def heartbeat_job(job_id: str) -> None:
 async def finish_job(
     job_id: str,
     *,
+    claim_token: str,
     status: str,
     result: dict[str, Any] | None = None,
     message: str | None = None,
-) -> None:
-    job = await get_job(job_id)
-    if job is None:
-        return
-    job["status"] = status
-    job["result"] = result
-    job["message"] = message
-    await _save_job(job, terminal=status in TERMINAL_JOB_STATUSES)
+) -> bool:
+    if status not in TERMINAL_JOB_STATUSES:
+        raise ValueError("Завершить задачу можно только с terminal-статусом.")
+    redis = await require_redis_client()
+    try:
+        finished = await redis.eval(
+            _FINISH_JOB_SCRIPT,
+            2,
+            f"{JOB_KEY_PREFIX}{job_id}",
+            ACTIVE_JOBS_KEY,
+            job_id,
+            claim_token,
+            status,
+            json.dumps(result, ensure_ascii=False),
+            json.dumps(message, ensure_ascii=False),
+            time.time(),
+            settings.DADATA_JOB_STATUS_TTL_SECONDS,
+            STREAM_GROUP,
+            FULL_REFRESH_PROGRESS_PREFIX,
+            "dadata:dedupe:",
+        )
+    except RedisErrorType as error:
+        raise DadataRuntimeError("Не удалось завершить задачу Dadata.") from error
+    if not finished:
+        return False
     await record_metric(f"jobs_{status}")
+    return True
 
 
 async def requeue_job(
@@ -481,6 +594,7 @@ async def requeue_job(
         job["stream_entry_id"] = stream_entry_id
     if retry_count is not None:
         job["retry_count"] = retry_count
+    job.pop("claim_token", None)
     job["status"] = "queued"
     job["message"] = message
     await _save_job(job)
@@ -521,6 +635,33 @@ async def promote_scheduled_jobs(*, limit: int = 100) -> int:
     return promoted
 
 
+async def _recover_job_if_lease_expired(
+    redis,
+    job_id: str,
+    *,
+    claimed_stream: str = "",
+    claimed_entry: str = "",
+) -> bool:
+    try:
+        recovered = await redis.eval(
+            _RECOVER_JOB_SCRIPT,
+            2,
+            f"{JOB_KEY_PREFIX}{job_id}",
+            ACTIVE_JOBS_KEY,
+            job_id,
+            time.time(),
+            "Задача восстановлена после остановки worker-а.",
+            STREAM_GROUP,
+            claimed_stream,
+            claimed_entry,
+            QUEUE_KEY,
+            settings.DADATA_JOB_STATUS_TTL_SECONDS,
+        )
+    except RedisErrorType as error:
+        raise DadataRuntimeError("Не удалось восстановить задачу Dadata.") from error
+    return bool(recovered)
+
+
 async def recover_stale_jobs() -> int:
     redis = await require_redis_client()
     try:
@@ -548,27 +689,16 @@ async def recover_stale_jobs() -> int:
             if not job_id:
                 await redis.xack(stream_key, STREAM_GROUP, entry_id)
                 continue
-            job = await get_job(job_id)
-            if job is None or job.get("status") in TERMINAL_JOB_STATUSES:
-                await redis.xack(stream_key, STREAM_GROUP, entry_id)
-                continue
-            await requeue_job(
+            if await _recover_job_if_lease_expired(
+                redis,
                 job_id,
-                message="Задача восстановлена после остановки worker-а.",
-                stream_key=stream_key,
-                stream_entry_id=str(entry_id),
-            )
-            recovered += 1
+                claimed_stream=stream_key,
+                claimed_entry=str(entry_id),
+            ):
+                recovered += 1
     for job_id in stale_ids:
-        job = await get_job(str(job_id))
-        if job is None:
-            await redis.zrem(ACTIVE_JOBS_KEY, job_id)
-            continue
-        if job.get("status") == "running":
-            await requeue_job(str(job_id), message="Задача восстановлена после остановки worker-а.")
+        if await _recover_job_if_lease_expired(redis, str(job_id)):
             recovered += 1
-        else:
-            await redis.zrem(ACTIVE_JOBS_KEY, job_id)
     return recovered
 
 

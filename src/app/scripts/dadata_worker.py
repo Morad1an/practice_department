@@ -72,10 +72,10 @@ async def _schedule_refresh_if_due() -> None:
     )
 
 
-async def _heartbeat_loop(job_id: str) -> None:
+async def _heartbeat_loop(job_id: str, claim_token: str) -> None:
     while True:
         await asyncio.sleep(30)
-        await heartbeat_job(job_id)
+        await heartbeat_job(job_id, claim_token=claim_token)
 
 
 def _terminal_status(result_status: str) -> str:
@@ -113,7 +113,8 @@ async def _execute_job(job: dict[str, Any]):
 
 async def process_job(job: dict[str, Any]) -> None:
     job_id = str(job["job_id"])
-    heartbeat_task = asyncio.create_task(_heartbeat_loop(job_id))
+    claim_token = str(job["claim_token"])
+    heartbeat_task = asyncio.create_task(_heartbeat_loop(job_id, claim_token))
     try:
         if job["kind"] == "refresh_all":
             await record_metric("full_refresh_started")
@@ -132,13 +133,14 @@ async def process_job(job: dict[str, Any]) -> None:
                 )
                 return
         result_payload = result.model_dump(mode="json")
-        await finish_job(
+        finished = await finish_job(
             job_id,
+            claim_token=claim_token,
             status=_terminal_status(result.status),
             result=result_payload,
             message=result.message,
         )
-        if job["kind"] == "refresh_all":
+        if finished and job["kind"] == "refresh_all":
             await record_metric(f"full_refresh_{_terminal_status(result.status)}")
         logger.info(
             "dadata_job_finished",
@@ -154,13 +156,14 @@ async def process_job(job: dict[str, Any]) -> None:
             extra={"job_id": job_id, "kind": job.get("kind"), "error_type": type(error).__name__},
         )
         with suppress(DadataRuntimeError):
-            if job.get("kind") == "refresh_all":
-                await record_metric("full_refresh_failed")
-            await finish_job(
+            finished = await finish_job(
                 job_id,
+                claim_token=claim_token,
                 status="failed",
                 message="Внутренняя ошибка обработки задачи Dadata.",
             )
+            if finished and job.get("kind") == "refresh_all":
+                await record_metric("full_refresh_failed")
     finally:
         heartbeat_task.cancel()
         with suppress(asyncio.CancelledError):
