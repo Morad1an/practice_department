@@ -339,13 +339,35 @@ async def enqueue_job(
         "queue_key": queue_key,
     }
     user_id = payload.get("created_by_user_id") if kind in {"lookup", "refresh_one"} else None
+    if user_id is not None:
+        job["subscriber_user_ids"] = [user_id]
     active_user_key = f"dadata:active-user:{user_id}" if user_id is not None else ""
     job["active_user_key"] = active_user_key or None
     script = """
     local existing = redis.call('GET', KEYS[1])
     if existing then
         local existing_job = redis.call('GET', ARGV[1] .. existing)
-        if existing_job then return {existing, '0'} end
+        if existing_job then
+            local subscriber_id = ARGV[7]
+            if subscriber_id ~= '' then
+                local existing_payload = cjson.decode(existing_job)
+                local subscribers = existing_payload.subscriber_user_ids
+                if type(subscribers) ~= 'table' then subscribers = {} end
+                local already_subscribed = false
+                for _, current_id in ipairs(subscribers) do
+                    if tostring(current_id) == subscriber_id then
+                        already_subscribed = true
+                        break
+                    end
+                end
+                if not already_subscribed then
+                    table.insert(subscribers, tonumber(subscriber_id))
+                    existing_payload.subscriber_user_ids = subscribers
+                    redis.call('SET', ARGV[1] .. existing, cjson.encode(existing_payload), 'EX', ARGV[3])
+                end
+            end
+            return {existing, '0'}
+        end
         redis.call('DEL', KEYS[1])
     end
     if KEYS[4] ~= '' then
@@ -375,6 +397,7 @@ async def enqueue_job(
             job_id,
             now,
             settings.DADATA_MAX_ACTIVE_MANUAL_JOBS_PER_USER,
+            str(user_id) if user_id is not None else "",
         )
         resolved_id = str(response[0])
         if str(response[1]) == "-1":

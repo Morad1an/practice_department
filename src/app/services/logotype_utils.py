@@ -11,6 +11,7 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 from PIL.Image import DecompressionBombError
 
 Image.MAX_IMAGE_PIXELS = 20_000_000
+MAX_LOGO_PIXELS = 20_000_000
 
 BASE64_BYTES = set(b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=\r\n")
 
@@ -23,6 +24,16 @@ def detect_logo_mime(data: bytes) -> str | None:
     if data.startswith(b"GIF8"):
         return "image/gif"
     return None
+
+
+def validate_logo_image_bytes(data: bytes) -> None:
+    try:
+        with Image.open(BytesIO(data)) as image:
+            if image.width * image.height > MAX_LOGO_PIXELS:
+                raise ValueError("Image has too many pixels.")
+            image.verify()
+    except (DecompressionBombError, OSError, UnidentifiedImageError, ValueError) as error:
+        raise ValueError("Invalid image payload.") from error
 
 
 def maybe_decode_logotype(data: bytes) -> bytes:

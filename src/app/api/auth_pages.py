@@ -7,6 +7,10 @@ from src.app.database import async_session_maker
 from src.app.services.auth import (
     authenticate_user,
     build_session_cookie_value,
+    clear_failed_login_attempts,
+    is_login_attempt_allowed,
+    normalize_username,
+    record_failed_login_attempt,
     resolve_safe_next_path,
 )
 from src.app.services.csrf import validate_submitted_csrf_token
@@ -86,6 +90,32 @@ async def login_submit(
             status_code=status.HTTP_403_FORBIDDEN,
         )
 
+    try:
+        normalized_username = normalize_username(username)
+    except ValueError as error:
+        return templates.TemplateResponse(
+            request,
+            "auth/login.html",
+            {
+                "next_path": safe_next_path,
+                "login_error": str(error),
+                "username_value": username,
+            },
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        )
+    client_host = request.client.host if request.client is not None else "unknown"
+    if not await is_login_attempt_allowed(client_host=client_host, username=normalized_username):
+        return templates.TemplateResponse(
+            request,
+            "auth/login.html",
+            {
+                "next_path": safe_next_path,
+                "login_error": "Слишком много попыток входа. Повторите позже.",
+                "username_value": username,
+            },
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+        )
+
     async with async_session_maker() as session:
         user = await authenticate_user(
             session,
@@ -94,6 +124,7 @@ async def login_submit(
         )
 
     if user is None:
+        await record_failed_login_attempt(client_host=client_host, username=normalized_username)
         return templates.TemplateResponse(
             request,
             "auth/login.html",
@@ -105,6 +136,7 @@ async def login_submit(
             status_code=status.HTTP_401_UNAUTHORIZED,
         )
 
+    await clear_failed_login_attempts(client_host=client_host, username=normalized_username)
     response = RedirectResponse(url=safe_next_path, status_code=status.HTTP_303_SEE_OTHER)
     _set_auth_cookie(response, user_id=user.id)
     return response

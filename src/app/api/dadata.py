@@ -38,6 +38,16 @@ def _raise_validation_error(error: Exception) -> None:
     raise error
 
 
+def _can_read_job(job: dict, *, user: AuthenticatedUser) -> bool:
+    if user.can_admin:
+        return True
+    owner_id = (job.get("payload") or {}).get("created_by_user_id")
+    if owner_id == user.id:
+        return True
+    subscribers = job.get("subscriber_user_ids")
+    return isinstance(subscribers, list) and user.id in subscribers
+
+
 @router.post(
     "/api/dadata/party/lookup",
     response_model=DadataLookupResponse,
@@ -74,11 +84,7 @@ async def dadata_job_status(
         raise HTTPException(status_code=503, detail=str(error)) from error
     if job is None:
         raise HTTPException(status_code=404, detail="Задача Dadata не найдена или устарела.")
-    owner_id = (job.get("payload") or {}).get("created_by_user_id")
-    if owner_id is None:
-        if not user.can_admin:
-            raise HTTPException(status_code=403, detail="Недостаточно прав для просмотра задачи.")
-    elif owner_id != user.id and not user.can_admin:
+    if not _can_read_job(job, user=user):
         raise HTTPException(status_code=403, detail="Недостаточно прав для просмотра задачи.")
     result = job.get("result")
     parsed_result: (

@@ -1,3 +1,4 @@
+import hashlib
 import unittest
 from unittest.mock import AsyncMock, patch
 
@@ -5,7 +6,12 @@ from fastapi.testclient import TestClient
 
 from src.app.config import settings
 from src.app.schemas.organizations import ActiveOrganizationsFilters
-from src.app.services.auth import AuthenticatedUser
+from src.app.services.auth import _DUMMY_PASSWORD_HASH, AuthenticatedUser, verify_password
+from src.app.services.logotype_utils import validate_logo_image_bytes
+from src.app.services.organization_card_write import (
+    OrganizationCardValidationError,
+    _validate_logo_bytes,
+)
 from src.main import app
 from src.tests.http_test_utils import attach_csrf, build_form_with_csrf
 
@@ -149,6 +155,61 @@ class AuthAccessTests(unittest.TestCase):
         self.assertEqual(response.status_code, 303)
         self.assertEqual(response.headers["location"], "/organizations/active")
         self.assertIn(settings.AUTH_COOKIE_NAME, response.headers.get("set-cookie", ""))
+
+    def test_login_rejects_blank_username_with_422(self):
+        response = self.client.post(
+            "/login",
+            data=build_form_with_csrf(
+                self.client,
+                {"username": "   ", "password": "password123"},
+            ),
+        )
+
+        self.assertEqual(response.status_code, 422)
+        self.assertIn("Логин не может быть пустым", response.text)
+
+    def test_dummy_password_hash_is_valid_and_executes_pbkdf2(self):
+        with patch(
+            "src.app.services.auth.hashlib.pbkdf2_hmac",
+            wraps=hashlib.pbkdf2_hmac,
+        ) as pbkdf2:
+            self.assertFalse(verify_password("wrong-password", _DUMMY_PASSWORD_HASH))
+
+        pbkdf2.assert_called_once()
+
+    def test_oversized_logo_upload_returns_422_before_database_access(self):
+        with patch(
+            "src.main.resolve_auth_user_from_session_cookie",
+            new=AsyncMock(return_value=build_user(role="editor")),
+        ):
+            response = self.client.post(
+                "/api/organizations/1/logo",
+                files={"logo_file": ("logo.png", b"x" * (1024 * 1024 + 1), "image/png")},
+                headers=attach_csrf(self.client),
+            )
+
+        self.assertEqual(response.status_code, 422)
+        self.assertIn("превышает допустимый размер", response.json()["detail"])
+
+    def test_logo_request_body_is_rejected_before_multipart_parsing(self):
+        response = self.client.post(
+            "/api/organizations/1/logo",
+            content=b"x" * (1024 * 1024 + 64 * 1024 + 1),
+            headers={"content-type": "multipart/form-data; boundary=test"},
+        )
+
+        self.assertEqual(response.status_code, 413)
+
+    def test_small_corrupt_png_is_rejected_by_image_decoder(self):
+        with self.assertRaisesRegex(OrganizationCardValidationError, "повреждён"):
+            _validate_logo_bytes(b"\x89PNG\r\n\x1a\nnot-a-real-png")
+
+    def test_logo_with_too_many_pixels_is_rejected(self):
+        with patch("src.app.services.logotype_utils.Image.open") as image_open:
+            image_open.return_value.__enter__.return_value.width = 5_000
+            image_open.return_value.__enter__.return_value.height = 4_001
+            with self.assertRaisesRegex(ValueError, "Invalid image"):
+                validate_logo_image_bytes(b"image")
 
     def test_logout_clears_cookie(self):
         with patch(

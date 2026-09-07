@@ -427,7 +427,7 @@ async def lookup_organization_by_inn(
     )
 
 
-async def refresh_organization_from_dadata(
+async def refresh_organization_from_dadata(  # noqa: C901 - explicit stale-job outcomes are security-critical
     session: AsyncSession,
     *,
     organization_id: int,

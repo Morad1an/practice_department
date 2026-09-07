@@ -257,6 +257,31 @@ def test_dadata_job_status_is_hidden_from_another_editor():
     assert response.status_code == 403
 
 
+def test_dadata_job_status_is_available_to_a_subscribed_editor():
+    client = TestClient(app)
+    job = {
+        "job_id": "job-1",
+        "kind": "lookup",
+        "status": "success",
+        "result": None,
+        "message": None,
+        "created_at": 1.0,
+        "updated_at": 2.0,
+        "payload": {"created_by_user_id": 2},
+        "subscriber_user_ids": [1, 2],
+    }
+    with (
+        patch(
+            "src.main.resolve_auth_user_from_session_cookie",
+            new=AsyncMock(return_value=build_user(role="editor")),
+        ),
+        patch("src.app.api.dadata.get_job", new=AsyncMock(return_value=job)),
+    ):
+        response = client.get("/api/dadata/jobs/job-1")
+
+    assert response.status_code == 200
+
+
 def test_admin_can_read_another_users_dadata_job():
     client = TestClient(app)
     job = {

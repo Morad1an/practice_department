@@ -87,6 +87,41 @@ def test_enqueue_job_creates_redis_backed_status_and_dedupe():
     assert any("dadata:dedupe" not in script and "XADD" in script for script in redis.scripts)
 
 
+def test_enqueue_job_adds_second_manual_requester_to_an_existing_job():
+    redis = _FakeRedis()
+    existing_job = {
+        "job_id": "existing-job",
+        "kind": "lookup",
+        "status": "queued",
+        "payload": {"created_by_user_id": 1},
+        "subscriber_user_ids": [1],
+    }
+    redis.eval = AsyncMock(return_value=["existing-job", "0"])
+    with (
+        patch(
+            "src.app.services.dadata.runtime.require_redis_client",
+            new=AsyncMock(return_value=redis),
+        ),
+        patch(
+            "src.app.services.dadata.runtime.get_job",
+            new=AsyncMock(return_value=existing_job),
+        ),
+    ):
+        job, created = asyncio.run(
+            enqueue_job(
+                kind="lookup",
+                payload={"inn": "7719402047", "created_by_user_id": 2},
+                dedupe_key="inn:7719402047",
+            )
+        )
+
+    assert created is False
+    assert job == existing_job
+    script = redis.eval.await_args.args[0]
+    assert "subscriber_user_ids" in script
+    assert redis.eval.await_args.args[-1] == "2"
+
+
 def test_rps_check_and_reservation_are_atomic_in_one_script():
     redis = _FakeRedis()
     with patch(

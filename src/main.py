@@ -14,6 +14,7 @@ from src.app.api.dadata import router as dadata_router
 from src.app.api.organizations import api_router, page_router
 from src.app.config import settings
 from src.app.database import engine
+from src.app.middleware import UploadBodyLimitMiddleware
 from src.app.services.auth import resolve_auth_user_from_session_cookie
 from src.app.services.csrf import ensure_request_csrf_token, validate_request_csrf
 from src.app.services.dadata.client import close_dadata_client
@@ -142,6 +143,9 @@ async def auth_session_middleware(request: Request, call_next):
     if csrf_cookie_needs_refresh or not request.cookies.get(settings.CSRF_COOKIE_NAME):
         _set_csrf_cookie(response, request.state.csrf_token)
     return response
+
+
+app.add_middleware(UploadBodyLimitMiddleware)
 
 
 app.include_router(auth_page_router)

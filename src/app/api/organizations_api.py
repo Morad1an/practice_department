@@ -545,16 +545,16 @@ async def upload_organization_logo(
     logo_file: UploadFile = File(...),
     _: None = Depends(require_editor_user),
 ):
-    logo_bytes = await _read_upload_bytes(logo_file, max_bytes=_MAX_LOGO_SIZE_BYTES)
-    async with async_session_maker() as session:
-        try:
+    try:
+        logo_bytes = await _read_upload_bytes(logo_file, max_bytes=_MAX_LOGO_SIZE_BYTES)
+        async with async_session_maker() as session:
             await save_organization_logo(
                 session,
                 organization_id=organization_id,
                 logo_bytes=logo_bytes,
             )
-        except Exception as error:  # pragma: no cover - normalized below
-            _raise_card_api_error(error)
+    except Exception as error:  # pragma: no cover - normalized below
+        _raise_card_api_error(error)
 
     return OrganizationCardSaveResult(
         organization_id=organization_id,
@@ -630,11 +630,6 @@ async def edit_organization_document(
     pdf_file: UploadFile | None = File(default=None),
     _: None = Depends(require_editor_user),
 ):
-    pdf_bytes = (
-        await _read_upload_bytes(pdf_file, max_bytes=_MAX_PDF_SIZE_BYTES)
-        if pdf_file is not None
-        else None
-    )
     payload = OrganizationDocumentUpdatePayload(
         name_primary=name_primary,
         name_secondary=name_secondary,
@@ -644,8 +639,13 @@ async def edit_organization_document(
         is_actual=is_actual,
     )
 
-    async with async_session_maker() as session:
-        try:
+    try:
+        pdf_bytes = (
+            await _read_upload_bytes(pdf_file, max_bytes=_MAX_PDF_SIZE_BYTES)
+            if pdf_file is not None
+            else None
+        )
+        async with async_session_maker() as session:
             await update_organization_document(
                 session,
                 organization_id=organization_id,
@@ -654,8 +654,8 @@ async def edit_organization_document(
                 pdf_bytes=pdf_bytes,
                 pdf_filename=pdf_file.filename if pdf_file is not None else None,
             )
-        except Exception as error:  # pragma: no cover - normalized below
-            _raise_card_api_error(error)
+    except Exception as error:  # pragma: no cover - normalized below
+        _raise_card_api_error(error)
 
     return OrganizationCardSaveResult(
         organization_id=organization_id,

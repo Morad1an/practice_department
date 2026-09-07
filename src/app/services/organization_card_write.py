@@ -4,7 +4,7 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, insert, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.app.models.contract import ContractOrm
@@ -24,6 +24,7 @@ from src.app.models.organization_detaillegalinformation import OrganizationDetai
 from src.app.models.organization_detaillogotype import OrganizationDetailLogotype
 from src.app.models.organization_detailstudyfield import OrganizationDetailStudyField
 from src.app.models.organization_distributionstatistic import OrganizationDistributionStatistic
+from src.app.models.organization_inn_lock import OrganizationInnLock
 from src.app.models.organization_previousname import OrganizationPreviousName
 from src.app.models.practice_distributionorderblock import PracticeDistributionOrderBlock
 from src.app.models.university_academicdepartment import UniversityAcademicDepartment
@@ -37,7 +38,11 @@ from src.app.schemas.organizations import (
     OrganizationDocumentUpdatePayload,
     OrganizationLeaderContactsSavePayload,
 )
-from src.app.services.logotype_utils import build_logo_preview_bytes, detect_logo_mime
+from src.app.services.logotype_utils import (
+    build_logo_preview_bytes,
+    detect_logo_mime,
+    validate_logo_image_bytes,
+)
 from src.app.services.logotypes_batch import cache_logotype_data, invalidate_logotype_cache
 
 
@@ -111,6 +116,10 @@ def _validate_logo_bytes(logo_bytes: bytes) -> bytes:
         raise OrganizationCardValidationError("Логотип превышает допустимый размер 1 МБ.")
     if detect_logo_mime(logo_bytes) is None:
         raise OrganizationCardValidationError("Поддерживаются только PNG, JPEG и GIF.")
+    try:
+        validate_logo_image_bytes(logo_bytes)
+    except ValueError as error:
+        raise OrganizationCardValidationError("Файл логотипа повреждён.") from error
     return logo_bytes
 
 
@@ -707,6 +716,35 @@ async def _validate_create_required_requisites(
         raise OrganizationCardValidationError("Поле «ИНН» обязательно при создании организации.")
 
 
+async def _prepare_inn_from_payload(
+    session: AsyncSession,
+    *,
+    requisites: list[OrganizationCardRequisiteInput],
+) -> str | None:
+    inn_type_id = await _find_requisite_type_id_by_name(
+        session,
+        requisite_name="ИНН",
+    )
+    if inn_type_id is None:
+        return None
+    prepared_values = [
+        value
+        for requisite in requisites
+        if requisite.type_id == inn_type_id
+        if (value := _normalize_text(requisite.value)) is not None
+    ]
+    if len(prepared_values) > 1:
+        raise OrganizationCardValidationError(
+            "У организации может быть только один реквизит «ИНН»."
+        )
+    if not prepared_values:
+        return None
+    inn = prepared_values[0]
+    if not re.fullmatch(r"\d{10}", inn):
+        raise OrganizationCardValidationError("ИНН должен состоять ровно из 10 цифр.")
+    return inn
+
+
 async def _sync_organization_inn(session: AsyncSession, *, organization: OrganizationOrm) -> None:
     previous_inn = organization.inn
     inn_values = list(
@@ -741,11 +779,26 @@ async def _sync_organization_inn(session: AsyncSession, *, organization: Organiz
             select(OrganizationOrm.id)
             .where(OrganizationOrm.inn == inn)
             .where(OrganizationOrm.id != organization.id)
+            .with_for_update()
             .limit(1)
         )
         if existing_id is not None:
             raise OrganizationCardValidationError("Организация с таким ИНН уже существует.")
     organization.inn = inn
+
+
+async def _lock_inn_for_manual_write(session: AsyncSession, *, inn: str) -> None:
+    """Serialize concurrent manual attempts to claim an otherwise free INN.
+
+    ``organization.inn`` intentionally permits historical duplicates. A separate
+    unique lock row lets a new value be checked and committed under one MySQL
+    transaction without changing that legacy rule.
+    """
+
+    await session.execute(insert(OrganizationInnLock).values(inn=inn).prefix_with("IGNORE"))
+    await session.execute(
+        select(OrganizationInnLock.inn).where(OrganizationInnLock.inn == inn).with_for_update()
+    )
 
 
 async def save_organization_card(
@@ -760,9 +813,21 @@ async def save_organization_card(
             requisites=payload.requisites,
         )
         organization = OrganizationOrm()
-        session.add(organization)
     else:
         organization = await _get_organization_for_update(session, organization_id)
+
+    pending_inn = await _prepare_inn_from_payload(
+        session,
+        requisites=payload.requisites,
+    )
+    if pending_inn is not None and pending_inn != organization.inn:
+        # Acquire the per-INN lock before this transaction writes an organization
+        # row. Otherwise two creates can each lock their temporary NULL index row
+        # and deadlock while waiting for the common INN lock.
+        await _lock_inn_for_manual_write(session, inn=pending_inn)
+
+    if organization_id is None:
+        session.add(organization)
 
     organization.name_short = _require_limited_text(
         payload.name_short,

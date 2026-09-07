@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import asyncio
 import base64
 import hashlib
 import hmac
 import secrets
+import time
+from collections import deque
 from dataclasses import dataclass
 from typing import Literal
 
@@ -25,9 +28,14 @@ _SESSION_SALT = "diplom-auth-session"
 _VALID_ROLES: set[str] = {"viewer", "editor", "admin"}
 _DUMMY_PASSWORD_HASH = (
     "pbkdf2_sha256$310000$ZHVtbXlfc2FsdF8xMjM0NTY3OA==$"
-    "$"
-    "I5q3N6K8Q1Q4m8JUzvPjM6b7N8R8_-zEr6WzL4sY5dU="
+    "UC12QHPRz_qvwVIPPk2k6ihmoQGTzpQBi1I6lyl8BIs="
 )
+_LOGIN_FAILURE_WINDOW_SECONDS = 15 * 60
+_LOGIN_MAX_FAILURES = 5
+_LOGIN_BLOCK_SECONDS = 15 * 60
+_login_failures: dict[str, deque[float]] = {}
+_login_blocked_until: dict[str, float] = {}
+_login_attempt_lock = asyncio.Lock()
 
 
 @dataclass(slots=True)
@@ -182,11 +190,47 @@ async def authenticate_user(
         select(AppUserOrm).where(func.lower(AppUserOrm.username) == normalized_username)
     )
     if user is None or not user.is_active:
-        verify_password(password, _DUMMY_PASSWORD_HASH)
+        await asyncio.to_thread(verify_password, password, _DUMMY_PASSWORD_HASH)
         return None
-    if not verify_password(password, user.password_hash):
+    if not await asyncio.to_thread(verify_password, password, user.password_hash):
         return None
     return build_authenticated_user(user)
+
+
+def _login_attempt_key(*, client_host: str, username: str) -> str:
+    return f"{client_host}\x00{username}"
+
+
+async def is_login_attempt_allowed(*, client_host: str, username: str) -> bool:
+    key = _login_attempt_key(client_host=client_host, username=username)
+    now = time.monotonic()
+    async with _login_attempt_lock:
+        blocked_until = _login_blocked_until.get(key, 0.0)
+        if blocked_until > now:
+            return False
+        if blocked_until:
+            _login_blocked_until.pop(key, None)
+        return True
+
+
+async def record_failed_login_attempt(*, client_host: str, username: str) -> None:
+    key = _login_attempt_key(client_host=client_host, username=username)
+    now = time.monotonic()
+    async with _login_attempt_lock:
+        failures = _login_failures.setdefault(key, deque())
+        while failures and failures[0] <= now - _LOGIN_FAILURE_WINDOW_SECONDS:
+            failures.popleft()
+        failures.append(now)
+        if len(failures) >= _LOGIN_MAX_FAILURES:
+            _login_blocked_until[key] = now + _LOGIN_BLOCK_SECONDS
+            _login_failures.pop(key, None)
+
+
+async def clear_failed_login_attempts(*, client_host: str, username: str) -> None:
+    key = _login_attempt_key(client_host=client_host, username=username)
+    async with _login_attempt_lock:
+        _login_failures.pop(key, None)
+        _login_blocked_until.pop(key, None)
 
 
 async def upsert_auth_user(

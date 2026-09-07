@@ -6,6 +6,18 @@ from xml.sax.saxutils import escape
 from zipfile import ZIP_DEFLATED, ZipFile
 
 
+def _xml_10_text(value: object) -> str:
+    text = "" if value is None else str(value)
+    return "".join(
+        character
+        for character in text
+        if character in {"\t", "\n", "\r"}
+        or 0x20 <= ord(character) <= 0xD7FF
+        or 0xE000 <= ord(character) <= 0xFFFD
+        or 0x10000 <= ord(character) <= 0x10FFFF
+    )
+
+
 def _column_letter(index: int) -> str:
     if index < 1:
         raise ValueError("index must be positive")
@@ -19,7 +31,7 @@ def _column_letter(index: int) -> str:
 
 
 def _inline_string_cell(reference: str, value: object) -> str:
-    text = "" if value is None else str(value)
+    text = _xml_10_text(value)
     escaped = escape(text)
     return (
         f'<c r="{reference}" s="1" t="inlineStr">'
@@ -29,7 +41,7 @@ def _inline_string_cell(reference: str, value: object) -> str:
 
 
 def _header_cell(reference: str, value: object) -> str:
-    text = "" if value is None else str(value)
+    text = _xml_10_text(value)
     escaped = escape(text)
     return (
         f'<c r="{reference}" s="2" t="inlineStr">'
@@ -83,7 +95,7 @@ def build_xlsx_bytes(
     last_column = _column_letter(len(headers)) if headers else "A"
     last_row = max(len(all_rows), 1)
     dimension = f"A1:{last_column}{last_row}"
-    escaped_sheet_name = escape(sheet_name)
+    escaped_sheet_name = escape(_xml_10_text(sheet_name), {'"': "&quot;"})
     columns_xml = "".join(
         (f'<col min="{index}" max="{index}" width="{width}" ' 'bestFit="1" customWidth="1"/>')
         for index, width in enumerate(column_widths, start=1)

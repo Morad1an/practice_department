@@ -1,3 +1,4 @@
+import asyncio
 import os
 import time
 import unittest
@@ -6,7 +7,7 @@ from io import BytesIO
 from unittest.mock import AsyncMock, patch
 
 from PIL import Image
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 
 from src.app.database import async_session_maker, engine
 from src.app.models.contract import ContractOrm
@@ -382,6 +383,72 @@ class OrganizationCardWriteTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaisesRegex(OrganizationCardValidationError, "уже существует"):
                 await save_organization_card(session, payload=payload)
             await session.rollback()
+
+    async def test_concurrent_creates_allow_only_one_new_inn(self):
+        inn_type_id = await self._fetch_requisite_type_id("ИНН")
+        target_inn = f"78{time.time_ns() % 100_000_000:08d}"
+        first_payload = build_valid_payload(suffix=self._unique_suffix("concurrent-inn-first"))
+        second_payload = build_valid_payload(suffix=self._unique_suffix("concurrent-inn-second"))
+        for payload in (first_payload, second_payload):
+            payload.requisites = [
+                OrganizationCardRequisiteInput(type_id=inn_type_id, value=target_inn)
+            ]
+
+        from src.app.services import organization_card_write
+
+        original_lock = organization_card_write._lock_inn_for_manual_write
+        first_lock_taken = asyncio.Event()
+        allow_first_save = asyncio.Event()
+        second_lock_attempted = asyncio.Event()
+        lock_calls = 0
+
+        async def hold_first_lock(session, *, inn):
+            nonlocal lock_calls
+            lock_calls += 1
+            if lock_calls == 1:
+                await original_lock(session, inn=inn)
+                first_lock_taken.set()
+                await allow_first_save.wait()
+                return
+            second_lock_attempted.set()
+            await original_lock(session, inn=inn)
+
+        async def save_in_separate_session(payload):
+            async with async_session_maker() as session:
+                try:
+                    return await save_organization_card(session, payload=payload)
+                except Exception:
+                    await session.rollback()
+                    raise
+
+        with patch(
+            "src.app.services.organization_card_write._lock_inn_for_manual_write",
+            new=hold_first_lock,
+        ):
+            first_save = asyncio.create_task(save_in_separate_session(first_payload))
+            await asyncio.wait_for(first_lock_taken.wait(), timeout=5)
+            second_save = asyncio.create_task(save_in_separate_session(second_payload))
+            await asyncio.wait_for(second_lock_attempted.wait(), timeout=5)
+            allow_first_save.set()
+            results = await asyncio.gather(first_save, second_save, return_exceptions=True)
+
+        created_ids = [result for result in results if isinstance(result, int)]
+        failures = [result for result in results if isinstance(result, Exception)]
+        self.assertEqual(len(created_ids), 1)
+        self.assertEqual(len(failures), 1)
+        self.assertIsInstance(failures[0], OrganizationCardValidationError)
+        self.assertIn("уже существует", str(failures[0]))
+        self.created_organization_ids.extend(created_ids)
+
+        async with async_session_maker() as session:
+            self.assertEqual(
+                await session.scalar(
+                    select(func.count())
+                    .select_from(OrganizationOrm)
+                    .where(OrganizationOrm.inn == target_inn)
+                ),
+                1,
+            )
 
     async def test_update_rejects_change_to_an_occupied_inn(self):
         inn_type_id = await self._fetch_requisite_type_id("ИНН")

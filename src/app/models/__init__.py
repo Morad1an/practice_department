@@ -19,6 +19,7 @@ from src.app.models.organization_detaillegalinformation import OrganizationDetai
 from src.app.models.organization_detaillogotype import OrganizationDetailLogotype
 from src.app.models.organization_detailstudyfield import OrganizationDetailStudyField
 from src.app.models.organization_distributionstatistic import OrganizationDistributionStatistic
+from src.app.models.organization_inn_lock import OrganizationInnLock
 from src.app.models.organization_previousname import OrganizationPreviousName
 from src.app.models.practice_distributionorder import PracticeDistributionOrder
 from src.app.models.practice_distributionorderblock import PracticeDistributionOrderBlock
@@ -42,6 +43,7 @@ __all__ = [
     "DetailnameLegalInformation",
     "DetailnameSettlement",
     "OrganizationOrm",
+    "OrganizationInnLock",
     "OrganizationDetailContactData",
     "OrganizationDetailContactDataLocal",
     "OrganizationDetailContactEntity",
